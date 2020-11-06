@@ -112,7 +112,7 @@ jobs:
   # preserve permissions
   - script: |
       cd $(Pipeline.Workspace)
-      tar -chf build.tar build
+      tar -cJhf build.tar build
     displayName: Build tarball
     condition: >
       and(eq(variables['Build.DefinitionName'], 'Update build cache'),
