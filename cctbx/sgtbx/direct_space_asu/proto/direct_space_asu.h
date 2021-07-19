@@ -1,6 +1,8 @@
 #ifndef CCTBX_SGTBX_DIRECT_SPACE_ASU_H
 #define CCTBX_SGTBX_DIRECT_SPACE_ASU_H
 
+#include <scitbx/nullptr.h>
+
 #include <scitbx/array_family/shared.h>
 #include <cctbx/crystal/direct_space_asu.h>
 
