@@ -117,7 +117,7 @@
 #include <stdlib.h> /* NULL, free */
 #include <string.h> /* strlen() */
 #include <stdio.h>  /* sprintf(), NULL? */
-#include "cmaes_interface.h" /* <time.h> via cmaes.h */
+#include "cmaes_extern_interface.h" /* <time.h> via cmaes.h */
 
 /* --------------------------------------------------------- */
 /* ------------------- Declarations ------------------------ */

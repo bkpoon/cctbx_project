@@ -8,7 +8,7 @@
 #include <scitbx/array_family/versa.h>
 #include <scitbx/array_family/accessors/c_grid.h>
 
-#include "cma/cmaes_interface.h"
+#include "cma/cmaes.h"
 
 /* ============================================================================
    Wrapper for the Covariance Matrix Adaptation Evolution Strategy (CMA-ES)
@@ -47,6 +47,21 @@
      get_result - returns the best guess ever encountered
    ----------------------------------------------------------------------------
 */
+
+// Copied declarations from cma/cmaes_interface.h
+extern "C"
+{
+  double * cmaes_init(cmaes_t *, int dimension , double *xstart,
+                double *stddev, long seed, int lambda,
+                const char *input_parameter_filename);
+  double         cmaes_Get(cmaes_t *, char const *keyword);
+  double *       cmaes_GetNew( cmaes_t *t, char const *keyword);
+  void cmaes_exit(cmaes_t *);
+  double * const * cmaes_SamplePopulation(cmaes_t *);
+  double *         cmaes_UpdateDistribution(cmaes_t *,
+                                            const double *rgFitnessValues);
+  const char *     cmaes_TestForTermination(cmaes_t *);
+}
 
 namespace cma_es {
 
