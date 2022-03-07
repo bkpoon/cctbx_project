@@ -167,6 +167,18 @@ steps:
   displayName: Debug info
   condition: succeededOrFailed()
 
+- script: |
+    set -xe
+    cd $(Pipeline.Workspace)
+    source ./build/setpaths.sh
+    cd modules/chem_data
+    for d in cablam rotarama; do
+      rm -fr ${d}_data/*.pickle
+      rm -fr ${d}_data/*.dlite
+      mmtbx.rebuild_${d}_cache
+    done
+  displayName: Rebuild cablam and rotarama databases
+
 # test
 - script: |
     set -xe
@@ -190,6 +202,7 @@ steps:
       module=gltbx \
       module=iotbx \
       module=libtbx \
+      module=mmtbx \
       module=rstbx \
       module=scitbx \
       module=crys3d \

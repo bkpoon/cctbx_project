@@ -68,16 +68,10 @@ jobs:
   # download test data
   - template: ./templates/download-data-cache.yml
 
-  # delete chem_data
-  - script: |
-      cd $(Pipeline.Workspace)/modules
-      rm -fr chem_data
-    displayName: Remove chem_data
-
   # preserve permissions
   - script: |
       cd $(Pipeline.Workspace)
-      tar -chf modules.tar modules
+      tar -zchf modules.tar modules
     displayName: Build tarball
 
   # publish artifact

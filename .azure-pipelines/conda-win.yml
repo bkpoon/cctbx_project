@@ -201,6 +201,16 @@ jobs:
     displayName: Configure and Build
     retryCountOnTaskFailure: 3
 
+  - script: |
+      cd $(Pipeline.Workspace)
+      del /S /Q .\modules\chem_data\rotarama_data\*.pickle
+      del /S /Q .\modules\chem_data\rotarama_data\*.dlite
+      del /S /Q .\modules\chem_data\cablam_data\*.pickle
+      del /S /Q .\modules\chem_data\cablam_data\*.dlite
+      call .\build\bin\mmtbx.rebuild_rotarama_cache
+      call .\build\bin\mmtbx.rebuild_cablam_cache
+    displayName: Rebuild cablam and rotarama databases
+
   # test
   - script: |
       SET PYTHONLEGACYWINDOWSSTDIO=1
@@ -224,6 +234,7 @@ jobs:
         module=gltbx ^
         module=iotbx ^
         module=libtbx ^
+        module=mmtbx ^
         module=rstbx ^
         module=scitbx ^
         module=smtbx ^
