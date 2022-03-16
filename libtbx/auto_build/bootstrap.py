@@ -1864,7 +1864,7 @@ environment exists in or is defined by {conda_env}.
       # the get_environment function in ShellCommand updates the environment
       if os.environ.get('CCTBX_CONDA_USE_ENVIRONMENT_VARIABLES', None):
         env = {
-          'PYTHONPATH': None,
+          # 'PYTHONPATH': None,
           'LD_LIBRARY_PATH': None,
           'DYLD_LIBRARY_PATH': None,
           'DYLD_FALLBACK_LIBRARY_PATH': None
@@ -1900,9 +1900,9 @@ environment exists in or is defined by {conda_env}.
       ))
 
     # write extra setpaths script for conda
-    if self.use_conda is not None:
-      self.add_command('libtbx.install_conda', args=['--write_setpaths'],
-                       description='Writing additional setup scripts for conda.')
+    # if self.use_conda is not None:
+    #   self.add_command('libtbx.install_conda', args=['--write_setpaths'],
+    #                    description='Writing additional setup scripts for conda.')
 
   def add_make(self):
     self.add_command('libtbx.scons', args=['-j',

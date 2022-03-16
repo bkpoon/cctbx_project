@@ -127,7 +127,7 @@ def update_libtbx_env(default_dir=None):
   for path in sys.path:
     if path.endswith('site-packages'):
       site_packages_path = env.as_relocatable_path(path)
-      break
+      # break
   relocatable_sys_prefix = env.as_relocatable_path(sys_prefix)
   env.repository_paths = [relocatable_sys_prefix, site_packages_path]
   env.scons_dist_path = relocatable_sys_prefix
