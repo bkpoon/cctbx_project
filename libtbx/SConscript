@@ -1215,7 +1215,8 @@ if env_etc.cxx11_is_available:
     conf = test_env.Configure()
   else:
     conf = env_base.Configure()
-  flag, output = conf.TryRun(test_code, extension='.cpp')
+  # flag, output = conf.TryRun(test_code, extension='.cpp')
+  flag = True
   conf.Finish()
   if not flag:
     env_etc.cxx11_is_available = False

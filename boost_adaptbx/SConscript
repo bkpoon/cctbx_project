@@ -766,7 +766,7 @@ main()
             + u.replace(" ", "_").upper(), file=f)
       print(file=f)
       print("#endif // GUARD", file=f)
-  write_type_id_eq_h()
+  # write_type_id_eq_h()
 
   if (os.path.isfile(libtbx.env.under_build("lib/libswig_class_example.a"))):
     # this example requires these manual steps:
