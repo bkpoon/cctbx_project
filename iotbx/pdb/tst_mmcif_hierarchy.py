@@ -1085,10 +1085,11 @@ def run():
   exercise_question_mark_for_altloc()
   exercise_label_seq_id_with_ac()
   exercise_label_seq_id_with_ac_2()
-  if libtbx.env.find_in_repositories(relative_path='chem_data') is not None:
+  if libtbx.env.find_in_repositories(relative_path='chem_data') is not None \
+    and libtbx.env.find_in_repositories(relative_path='probe') is not None:
     exercise_struct_conn()
   else:
-    print('chem_data not present, skipping exercise_struct_conn')
+    print('chem_data and probe not present, skipping exercise_struct_conn')
 
 if __name__ == '__main__':
   run()

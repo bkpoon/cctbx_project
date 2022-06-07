@@ -50,7 +50,6 @@ general_tests = [
   "$D/monomer_library/tst_idealized_aa.py",
   "$D/regression/tst_ml_estimate.py",
   "$D/density_modification/tst_density_modification.py",
-  "$D/geometry_restraints/tst_ramachandran.py",
   "$D/geometry_restraints/tst_manager.py",
   "$D/geometry_restraints/external.py",
   "$D/regression/tst_map_type_parser.py",
@@ -73,7 +72,6 @@ general_tests = [
   "$D/refinement/tst_rigid_body_groups_from_pdb_chains.py",
   "$D/refinement/tst_refinement_flags.py",
   "$D/geometry_restraints/torsion_restraints/tst_reference_model.py",
-  "$D/geometry_restraints/torsion_restraints/tst_reference_model_ligands.py",
   # model tests, some more elsewhere in this file
   "$D/regression/model/tst_model_mtrix.py",
   "$D/regression/model/tst_model_ncs.py",
@@ -101,7 +99,6 @@ general_tests = [
   "$D/regression/ncs/tst_ncs_utils.py",
   "$D/regression/ncs/tst_ncs_restraints_group_list.py",
   "$D/regression/ncs/tst_ncs_search.py",
-  "$D/regression/ncs/tst_ncs_search_flips.py",
   "$D/regression/ncs/tst_restraints.py",
   "$D/regression/tst_geometry_minimization.py",
   "$D/regression/tst_special_term_at_end.py",
@@ -138,7 +135,6 @@ general_tests = [
   "$D/monomer_library/tst_carbo_linking.py",
   "$D/monomer_library/tst_glyco_hand.py",
   "$D/monomer_library/tst_glyco_coordination.py",
-  "$D/monomer_library/tst_paral_geo.py",
   #
   "$D/regression/tst_altloc_remediate.py",
   "$D/hydrogens/build_hydrogens.py",
@@ -197,13 +193,11 @@ general_tests = [
   "$D/conformation_dependent_library/tst_hpdl.py",
   "$D/conformation_dependent_library/tst_cis_c_n_ca.py",
   "$D/conformation_dependent_library/cdl_svl_database.py",
-  "$D/conformation_dependent_library/tst_pH_mechanism.py",
   "$D/conformation_dependent_library/tst_mcl_01.py",
   "$D/conformation_dependent_library/tst_mcl_02.py",
   "$D/conformation_dependent_library/tst_mcl_03.py",
   "$D/regression/tst_find_ss_structure.py",
   "$D/regression/tst_fix_rotamer_outliers.py",
-  "$D/regression/tst_chain_comparison.py",
   "$D/regression/tst_regularize_from_pdb.py",
   "$D/regression/tst_find_ncs.py",
   "$D/regression/tst_minimize_chain.py",
@@ -265,7 +259,6 @@ general_tests = [
   # validation/molprobity
   "$D/regression/tst_probe.py",
   "$D/regression/tst_reduce.py",
-  "$D/validation/regression/tst_molprobity_arguments.py",
   "$D/validation/regression/tst_waters.py",
   "$D/validation/regression/tst_keep_hydrogens.py",
   "$D/validation/regression/tst_mp_geo.py",
@@ -282,7 +275,6 @@ general_tests = [
   "$D/validation/regression/tst_molprobity_3.py",
   "$D/validation/regression/tst_hydrogen_addition_clashscore.py",
   "$D/validation/regression/tst_symmetry_SS.py",
-  "$D/validation/regression/tst_do_flips_clashscore.py",
   "$D/validation/regression/tst_find_region_max_value.py",
   #
   "$D/refinement/tst_select_best_starting_model.py",
@@ -299,24 +291,13 @@ general_tests = [
   #
   "$D/refinement/tst_group.py",
   "$D/refinement/tst_group_2.py",
-  "$D/secondary_structure/build/tst_1.py",
-  "$D/secondary_structure/build/tst_2.py",
-  "$D/secondary_structure/build/tst_3.py",
-  "$D/secondary_structure/build/tst_io.py",
-  "$D/secondary_structure/build/tst_ss_id_ncs.py",
-  "$D/regression/tst_loop_closure.py",
-  "$D/regression/model_idealization/tst_nomap_01.py",
-  "$D/regression/model_idealization/tst_nomap_02.py",
   "$D/regression/model_idealization/tst_nomap_03.py",
   "$D/regression/model_idealization/tst_nomap_04.py",
-  "$D/regression/model_idealization/tst_withmap_01.py",
-  "$D/regression/model_idealization/tst_withmap_02.py",
   "$D/regression/model_idealization/tst_withmap_03.py",
   "$D/regression/model_idealization/tst_withmap_04.py",
   "$D/regression/model_idealization/tst_withmap_05.py",
   "$D/regression/model_idealization/tst_withmap_06.py",
   "$D/regression/model_idealization/tst_ligands.py",
-  "$D/regression/model_idealization/tst_with_mtz.py",
   "$D/utils/tst_switch_rotamers.py",
   "$D/refinement/tst_occupancy_selections.py",
   "$D/regression/ncs/tst_minimization_ncs_constraints.py",
@@ -324,7 +305,6 @@ general_tests = [
   "$D/regression/ncs/tst_minimization_ncs_constraints3.py",
   "$D/regression/ncs/tst_minimization_ncs_constraints_real_space.py",
   "$D/monomer_library/tst_correct_hydrogens.py",
-  "$D/monomer_library/tst_deuterium_terminii.py",
   # automatic linking
   "$D/monomer_library/tst_superpose_ideal.py",
   "$D/monomer_library/tst_iron_sulfur_clusters.py",
@@ -345,10 +325,7 @@ general_tests = [
   "$D/regression/tst_polder_3.py",
   "$D/regression/tst_polder_box.py",
   "$D/regression/tst_polder_ccs.py",
-  "$D/regression/tst_map_model_cc.py",
   "$D/regression/tst_model_map.py",
-  #
-  "$D/regression/tst_validate_ligands.py",
   #
   "$D/regression/tst_cis_trans_peptide_link.py",
   "$D/regression/tst_apply_cif_restraints.py",
@@ -378,7 +355,6 @@ general_tests = [
   "$D/ions/tst_geometries.py",
   "$D/ions/tst_pick_k.py",
   "$D/ions/tst_environment.py",
-  "$D/regression/tst_table_one.py",
   "$D/regression/tst_msa.py",
   "$D/regression/tst_cc_star.py",
   "$D/regression/tst_fmodel_2.py",
@@ -394,7 +370,6 @@ general_tests = [
   "$D/regression/fix_cablam/tst_insertion_codes.py",
   #
   "$D/regression/tst_scattering_type_registry.py",
-  "$D/atomic_environment_vectors/tst.py",
   #
   "$D/building/ligands/tst_00.py",
   # Tests that were not in the list and caused us to fail as of 10/6/2021
@@ -428,8 +403,12 @@ molprobity_tests = [
   "$D/regression/tst_statistics_output.py",
   "$D/regression/tst_geo_min_restraints_phil.py",
   "$D/regression/tst_model_vs_map.py",
+  "$D/regression/tst_table_one.py",
+  "$D/validation/regression/tst_do_flips_clashscore.py",
+  "$D/geometry_restraints/torsion_restraints/tst_reference_model_ligands.py",
   # validation/molprobity
   "$D/validation/regression/tst_nqh_minimize.py",
+  "$D/validation/regression/tst_molprobity_arguments.py",
   "$D/validation/regression/tst_molprobity_1.py",
   "$D/validation/regression/tst_molprobity_4.py",
   "$D/validation/regression/tst_molprobity_5.py",
@@ -481,11 +460,39 @@ molprobity_tests = [
   ["$D/monomer_library/tst_linking.py", "40"],
 ]
 
+phenix_tests = [
+  "$D/geometry_restraints/tst_ramachandran.py",
+  "$D/monomer_library/tst_deuterium_terminii.py",
+  "$D/monomer_library/tst_paral_geo.py",
+  "$D/regression/tst_chain_comparison.py",
+  "$D/regression/tst_loop_closure.py",
+  "$D/regression/tst_map_model_cc.py",
+  "$D/regression/tst_validate_ligands.py",
+  "$D/conformation_dependent_library/tst_pH_mechanism.py",
+  "$D/regression/model_idealization/tst_nomap_01.py",
+  "$D/regression/model_idealization/tst_nomap_02.py",
+  "$D/regression/model_idealization/tst_withmap_01.py",
+  "$D/regression/model_idealization/tst_withmap_02.py",
+  "$D/regression/model_idealization/tst_with_mtz.py",
+  "$D/regression/ncs/tst_ncs_search_flips.py",
+  "$D/secondary_structure/build/tst_1.py",
+  "$D/secondary_structure/build/tst_2.py",
+  "$D/secondary_structure/build/tst_3.py",
+  "$D/secondary_structure/build/tst_io.py",
+  "$D/secondary_structure/build/tst_ss_id_ncs.py",
+  "$D/atomic_environment_vectors/tst.py",
+]
+
 if libtbx.env.has_module(name="probe"):
-  tst_list = tuple(general_tests + molprobity_tests)
+  tst_list = general_tests + molprobity_tests
 else:
   print("Skipping %d MolProbity tests: probe not configured"%len(molprobity_tests))
-  tst_list = tuple(general_tests)
+  tst_list = general_tests
+
+if libtbx.env.has_module(name="phenix"):
+  tst_list += phenix_tests
+else:
+  print("SKipping %d Phenix tests: phenix not configured" % len(phenix_tests))
 
 # generally failing tests
 tst_list_expected_failures = [

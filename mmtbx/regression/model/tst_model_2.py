@@ -494,7 +494,10 @@ def exercise_model_filename():
 if (__name__ == "__main__"):
   t0 = time.time()
   exercise_macromolecule_plus_hetatms_by_chain_selections()
-  exercise_ss_creation_crash()
+  if libtbx.env.has_module('ksdssp'):
+    exercise_ss_creation_crash()
+  else:
+    print('ksdssp not configured, skipping exercise_ss_creation_crash')
   exercise_set_b_iso()
   exercise_convert_to_isotropic()
   run()

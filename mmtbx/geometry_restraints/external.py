@@ -112,5 +112,8 @@ if any_quantum_package_installed:
   external_energy_params_str += any_quantum_package_installed
 
 if __name__=='__main__':
-  print('external_energy_params_str',external_energy_params_str)
-  assert external_energy_params_str.find('amber')>-1
+  if amber_installed:
+    print('external_energy_params_str',external_energy_params_str)
+    assert external_energy_params_str.find('amber')>-1
+  else:
+    print('amber not configured, skipping external.py')

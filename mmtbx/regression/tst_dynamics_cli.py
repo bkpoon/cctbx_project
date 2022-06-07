@@ -91,5 +91,9 @@ END
   assert (sites_in.rms_difference(sites_out) > 0.3)
 
 if (__name__ == "__main__"):
-  exercise_dynamics_command()
-  print("OK")
+  import libtbx.load_env
+  if libtbx.env.has_module('ksdssp'):
+    exercise_dynamics_command()
+    print("OK")
+  else:
+    print('ksdssp not configured, skipping tst_dynamics_cli.py')
