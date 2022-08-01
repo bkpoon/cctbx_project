@@ -123,7 +123,7 @@ steps:
     source $(Pipeline.Workspace)/miniforge/etc/profile.d/conda.sh
     conda remove  -y --all -n $(PYTHON_VERSION)
     conda create -y --offline -n $(PYTHON_VERSION) --file $(Pipeline.Workspace)/channel/env.txt
-    conda install -y -c conda-forge --no-deps -n $(PYTHON_VERSION) junit-xml
+    conda install -y -c conda-forge --no-deps -n $(PYTHON_VERSION) junit-xml networkx
   displayName: Create conda environment
   retryCountOnTaskFailure: 3
 
@@ -208,7 +208,8 @@ steps:
       module=crys3d \
       module=smtbx \
       module=spotfinder \
-      nproc=4
+      nproc=4 \
+      verbosity=2
   failOnStderr: false
   displayName: Test
   condition: >
