@@ -780,6 +780,7 @@ def test_fmodel_params():
   assert not hasattr(dm, 'get_fmodel_params')
 
   dm = DataManager(['miller_array'])
+  assert not hasattr(dm, 'get_fmodel_params')
   params = dm.export_phil_scope(as_extract=True)
   assert not hasattr(params.data_manager, 'fmodel')
 

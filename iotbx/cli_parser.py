@@ -174,8 +174,8 @@ class CCTBXParser(ParserBase):
     # set up master and working PHIL scopes
     self.master_phil = iotbx.phil.parse(
       program_class.master_phil_str, process_includes=True)
-    required_output_phil = iotbx.phil.parse(ProgramTemplate.output_phil_str)
-    self.master_phil.adopt_scope(required_output_phil)
+    self.required_output_phil = iotbx.phil.parse(ProgramTemplate.output_phil_str)
+    self.master_phil.adopt_scope(self.required_output_phil)
     self.working_phil = None
 
     self.add_default_options()
@@ -423,8 +423,33 @@ class CCTBXParser(ParserBase):
     print('', file=self.logger)
 
   # ---------------------------------------------------------------------------
+  def raise_Sorry_for_unused_phil(self):
+    '''
+    Convenience function for aborting when there are unused PHIL
+    parameters. This function is useful when custom PHIL handling is
+    necessary.
+    '''
+    if len(self.unused_phil) > 0 and self.unused_phil_raises_sorry:
+      advice = ''
+      print('  Unrecognized PHIL parameters:', file=self.logger)
+      print('  -----------------------------', file=self.logger)
+      for phil in self.unused_phil:
+        print('    %s' % phil, file=self.logger)
+        if str(phil).find('.qi.')>-1:
+          advice = 'Consider setting a QM package using PHENIX_MOPAC, PHENIX_ORCA or similar.'
+      print('', file=self.logger)
+      error_message = 'Some PHIL parameters are not recognized by %s.\n' % \
+                      self.prog
+      error_message += wordwrap('Please run this program with the --show-defaults option to see what parameters are available.', max_chars=self.text_width) + '\n'
+      error_message += wordwrap('PHIL parameters in files should be fully specified (e.g. "output.overwrite" instead of just "overwrite")', max_chars=self.text_width) + '\n'
+      if advice:
+        error_message += wordwrap(advice, max_chars=self.text_width) + '\n'
+      if self.unused_phil_raises_sorry:
+        raise Sorry(error_message)
+
+  # ---------------------------------------------------------------------------
   def process_phil(self, phil_list):
-    ''''
+    '''
     Process PHIL arguments
     Also checks PHIL arguments (command line and files) for parameters that
     specify files (.type = path)
@@ -463,8 +488,10 @@ class CCTBXParser(ParserBase):
     # command-line PHIL arguments override any previous settings and are
     # processed in given order
     if len(phil_list) > 0:
-      interpreter = self.master_phil.command_line_argument_interpreter()
-      data_manager_interpreter = self.data_manager.master_phil.command_line_argument_interpreter()
+      full_phil_str = self.data_manager.master_phil_str + self.program_class.master_phil_str
+      full_phil = iotbx.phil.parse(full_phil_str, process_includes=True)
+      full_phil.adopt_scope(self.required_output_phil)
+      interpreter = full_phil.command_line_argument_interpreter()
       print('  Adding command-line PHIL:', file=self.logger)
       print('  -------------------------', file=self.logger)
       for phil in phil_list:
@@ -474,23 +501,18 @@ class CCTBXParser(ParserBase):
       # check each parameter
       for phil in phil_list:
         processed_arg = None
-        data_manager_processed_arg = None
         try:
           processed_arg = interpreter.process_arg(arg=phil)
         except Sorry as e:
           if e.__str__().startswith('Unknown'):
-            # check if it is a DataManager parameter
-            try:
-              data_manager_processed_arg = data_manager_interpreter.process_arg(arg=phil)
-            except Sorry as e2:
-              if e2.__str__().startswith('Unknown'):
-                self.unused_phil.append(phil)
+            self.unused_phil.append(phil)
           else:
             raise
         if processed_arg is not None:
-          sources.append(processed_arg)
-        if data_manager_processed_arg is not None:
-          data_manager_sources.append(data_manager_processed_arg)
+          if processed_arg.objects[0].name == 'data_manager':
+            data_manager_sources.append(processed_arg)
+          else:
+            sources.append(processed_arg)
 
     if self.namespace.overwrite:  # override overwrite if True
       sources.append(iotbx.phil.parse('output.overwrite=True'))
@@ -511,24 +533,8 @@ class CCTBXParser(ParserBase):
       # load remaining files and final fmodel parameters
       self.data_manager.load_phil_scope(diff_phil)
 
-    # show unrecognized parameters and abort
-    if len(self.unused_phil) > 0 and self.unused_phil_raises_sorry:
-      advice = ''
-      print('  Unrecognized PHIL parameters:', file=self.logger)
-      print('  -----------------------------', file=self.logger)
-      for phil in self.unused_phil:
-        print('    %s' % phil, file=self.logger)
-        if str(phil).find('.qi.')>-1:
-          advice = 'Consider setting a QM package using PHENIX_MOPAC, PHENIX_ORCA or similar.'
-      print('', file=self.logger)
-      error_message = 'Some PHIL parameters are not recognized by %s.\n' % \
-                      self.prog
-      error_message += wordwrap('Please run this program with the --show-defaults option to see what parameters are available.', max_chars=self.text_width) + '\n'
-      error_message += wordwrap('PHIL parameters in files should be fully specified (e.g. "output.overwrite" instead of just "overwrite")', max_chars=self.text_width) + '\n'
-      if advice:
-        error_message += wordwrap(advice, max_chars=self.text_width) + '\n'
-      if self.unused_phil_raises_sorry:
-        raise Sorry(error_message)
+    # show unrecognized parameters and abort if self.unused_phil_raises_sorry is True
+    self.raise_Sorry_for_unused_phil()
 
     # process input phil for file/directory defintions and add to DataManager
     # Note: if a PHIL file is input as a PHIL parameter, the contents of the
