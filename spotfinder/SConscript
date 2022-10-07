@@ -33,7 +33,7 @@ env_etc.include_registry.append(
   paths=env_etc.spotfinder_common_includes)
 
 envlm = env.Clone(
-  LIBS=["ann","omptbx"]+env_etc.libm
+  LIBS=["ann_cctbx","omptbx"]+env_etc.libm
 )
 
 boost_libs = "#"+os.path.join(os.path.basename(env_etc.boost_dist), "libs")
