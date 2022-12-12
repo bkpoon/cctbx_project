@@ -2,8 +2,9 @@
 name: cctbxlite
 
 channels:
+  - cctbx202211
   - conda-forge
-  - cctbx
+  - phenix-project
 
 dependencies:
   # cctbx-base
