@@ -328,7 +328,6 @@ general_tests = [
   "$D/regression/tst_model_map.py",
   #
   "$D/regression/tst_cis_trans_peptide_link.py",
-  "$D/regression/tst_apply_cif_restraints.py",
   "$D/regression/tst_multi_residue_class.py",
   "$D/regression/tst_superpose.py",
   "$D/monomer_library/tst_server.py",
@@ -401,6 +400,7 @@ molprobity_tests = [
   "$D/validation/regression/tst_cbetadev.py",
   "$D/validation/regression/tst_cbetadev_02.py",
   "$D/regression/tst_statistics_output.py",
+  "$D/regression/tst_apply_cif_restraints.py",
   "$D/regression/tst_geo_min_restraints_phil.py",
   "$D/regression/tst_model_vs_map.py",
   "$D/regression/tst_table_one.py",
