@@ -226,15 +226,18 @@ def test_unknown_pair_type():
 def test_running_from_command_line():
   '''
   Make sure mmtbx.nonbonded_overlaps can run without errors
+  elbow is required
   '''
-  file_name = 'test_pdb_file.pdb'
-  if not os.path.isfile(file_name):
-    open(file_name,'w').write(raw_records_1)
-    #self.file_to_delete.append(self.file_name)
-  cmd = 'mmtbx.nonbonded_overlaps {}'
-  cmd = cmd.format(file_name)
-  r = easy_run.go(cmd, join_stdout_stderr=False)
-  assert(not bool(r.stderr_lines))
+  if libtbx.env.has_module(name='elbow'):
+    file_name = 'test_pdb_file.pdb'
+    if not os.path.isfile(file_name):
+      with open(file_name,'w') as f:
+        f.write(raw_records_1)
+      #self.file_to_delete.append(self.file_name)
+    cmd = 'mmtbx.nonbonded_overlaps {}'
+    cmd = cmd.format(file_name)
+    r = easy_run.go(cmd, join_stdout_stderr=False)
+    assert(not bool(r.stderr_lines))
 
 
 #def test_file_with_unknown_pair_type():

@@ -780,14 +780,17 @@ class test_nonbonded_overlaps(unittest.TestCase):
     self.assertTrue('1' in results[7])
 
   # OK transferred
+  @unittest.skipIf(not libtbx.env.has_module(name='elbow'), 'elbow is not available')
   def test_running_from_command_line(self):
     """
     make sure mmtbx.nonbonded_overlaps can run without errors when showing
-    overlaps info """
-
+    overlaps info
+    elbow is required
+    """
     file_name = 'test_pdb_file.pdb'
     if not os.path.isfile(file_name):
-      open(file_name,'w').write(raw_records1)
+      with open(file_name,'w') as f:
+        f.write(raw_records1)
       self.file_to_delete.append(self.file_name)
     cmd = 'mmtbx.nonbonded_overlaps {}'
     cmd = cmd.format(self.file_name)
