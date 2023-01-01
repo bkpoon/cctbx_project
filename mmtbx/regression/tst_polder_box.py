@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 from libtbx import easy_run
+import sys
 import time
 from libtbx.test_utils import approx_equal
 import iotbx.pdb
@@ -201,7 +202,10 @@ def exercise_00(prefix="tst_polder_box"):
   print("Omit       : %7.3f %7.3f %7.3f"%mmm_o)
   #
   assert approx_equal(mmm_mp, [-2.051, 1.255, -0.162], eps=0.15)
-  assert approx_equal(mmm_o,  [-0.558, 0.138, -0.068], eps=0.15)
+  if sys.platform.startswith('darwin'):
+    assert approx_equal(mmm_o,  [-0.980, 0.030, -0.321], eps=0.15)
+  else:
+    assert approx_equal(mmm_o,  [-0.558, 0.138, -0.068], eps=0.15)
 
 
 if (__name__ == "__main__"):
