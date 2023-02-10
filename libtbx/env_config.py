@@ -38,7 +38,7 @@ default_enable_cuda = False
 default_enable_kokkos = False
 default_opt_resources = False
 default_enable_cxx11 = False
-default_cxxstd = None
+default_cxxstd = 'c++11'
 default_use_conda = False
 
 def is_64bit_architecture():
