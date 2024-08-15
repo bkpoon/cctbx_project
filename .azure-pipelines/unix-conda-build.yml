@@ -128,11 +128,19 @@ steps:
     set -xe
     source $(Pipeline.Workspace)/miniforge/etc/profile.d/conda.sh
     conda remove  -y --all -n $(PYTHON_VERSION)
-    conda create -y --offline -n $(PYTHON_VERSION) --file $(Pipeline.Workspace)/channel/env.txt
+    # conda create -y --offline -n $(PYTHON_VERSION) --file $(Pipeline.Workspace)/channel/env.txt
+    conda create -y -n $(PYTHON_VERSION) --file $(Pipeline.Workspace)/modules/cctbx_project/libtbx/auto_build/conda_envs/cctbxlite_py39_osx-64.txt
     conda activate $(PYTHON_VERSION)
     pip install junit-xml
   displayName: Create conda environment
   retryCountOnTaskFailure: 3
+
+# delete boost directory if it exists
+- script: |
+    set -xe
+    cd $(Pipeline.Workspace)/modules
+    rm -fr boost
+  displayName: Remove Boost source
 
 # build
 - script: |
@@ -141,21 +149,21 @@ steps:
     conda activate $(PYTHON_VERSION)
     cd $(Pipeline.Workspace)
     python bootstrap.py build \
-      --builder=cctbx \
+      --builder=cctbxlite \
       --use-conda=${CONDA_PREFIX} \
       --nproc=4
-    cd build
-    source setpaths.sh
-    libtbx.configure \
-      cma_es \
-      fable \
-      rstbx \
-      spotfinder \
-      cbflib_adaptbx \
-      phenix_regression \
-      phenix_examples
-    libtbx.scons -j 4
-    libtbx.scons -j 4
+    # cd build
+    # source setpaths.sh
+    # libtbx.configure \
+    #   cma_es \
+    #   fable \
+    #   rstbx \
+    #   spotfinder \
+    #   cbflib_adaptbx \
+    #   phenix_regression \
+    #   phenix_examples
+    # libtbx.scons -j 4
+    # libtbx.scons -j 4
   displayName: Configure and Build
   condition: >
     and(succeeded(),
@@ -187,21 +195,21 @@ steps:
     export PYTHONDEVMODE=1
     export PYTHONTRACEMALLOC=1
     libtbx.run_tests_parallel \
-      module=annlib_adaptbx \
+      # module=annlib_adaptbx \
       module=boost_adaptbx \
-      module=cbflib_adaptbx \
+      # module=cbflib_adaptbx \
       module=cctbx \
       module=cctbx_website \
-      module=cma_es \
-      module=fable \
-      module=gltbx \
+      # module=cma_es \
+      # module=fable \
+      # module=gltbx \
       module=iotbx \
       module=libtbx \
-      module=rstbx \
+      # module=rstbx \
       module=scitbx \
-      module=crys3d \
+      # module=crys3d \
       module=smtbx \
-      module=spotfinder \
+      # module=spotfinder \
       nproc=4
   failOnStderr: false
   displayName: Test
