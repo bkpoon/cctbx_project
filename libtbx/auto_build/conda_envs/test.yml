@@ -1,0 +1,17 @@
+channels:
+- conda-forge
+dependencies:
+- future
+- libboost-devel =1.84
+- libboost-python-devel =1.84
+- numpy
+- pip
+- python =3.9
+- python.app
+- scons
+- six
+
+# for running tests
+- mrcfile
+- requests
+- scipy
