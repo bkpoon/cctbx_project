@@ -30,7 +30,7 @@ jobs:
   - script: |
       cd $(Pipeline.Workspace)
       export SVN_SSH="ssh -F $(ssh_config.secureFilePath)"
-      python bootstrap.py hot update --builder=cctbx --python=38 ${{ parameters.flags }}
+      python bootstrap.py hot update --builder=cctbxlite --python=38 ${{ parameters.flags }}
     displayName: Download sources
 
   - script: |
