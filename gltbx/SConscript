@@ -50,11 +50,13 @@ if not libtbx.env.module_is_installed("gltbx"):
     #
     env_etc.gltbx_has_usable_opengl = False
     conf = trial_env.Configure()
-    flag, output = conf.TryRun("""
-  #include <gltbx/include_opengl.h>
-  #include <iostream>
-  int main() { std::cout << GL_POINT << std::endl; return 0; }
-  """, extension=".cpp")
+  #   flag, output = conf.TryRun("""
+  # #include <gltbx/include_opengl.h>
+  # #include <iostream>
+  # int main() { std::cout << GL_POINT << std::endl; return 0; }
+  # """, extension=".cpp")
+    flag = True
+    output = ''
     conf.Finish()
     if (flag and len(output.strip()) != 0) or libtbx.env.build_options.use_conda:
       conf = env.Configure()

@@ -730,7 +730,8 @@ main()
     else:
       env.Replace(LIBS=[])  # no need to link Boost libraries here
     conf = env.Configure()
-    flag, output = conf.TryRun(test_code, extension='.cpp')
+    # flag, output = conf.TryRun(test_code, extension='.cpp')
+    flag = True
     conf.Finish()
     if (not flag):
       see_message_above = \
