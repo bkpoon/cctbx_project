@@ -138,10 +138,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<scalar_parameter>,
-             std::auto_ptr<wt> >("independent_scalar_parameter", no_init)
+             std::shared_ptr<wt> >("independent_scalar_parameter", no_init)
         .def(init<double, optional<bool> >
              ((arg("value"), arg("variable")=true)));
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -153,10 +153,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<independent_scalar_parameter>,
-             std::auto_ptr<wt> >("twin_fraction_parameter", no_init)
+             std::shared_ptr<wt> >("twin_fraction_parameter", no_init)
         .def(init<cctbx::xray::twin_fraction<double> *>((
           arg("twin_fraction"))));
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -168,10 +168,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<independent_scalar_parameter>,
-             std::auto_ptr<wt> >("extinction_parameter", no_init)
+             std::shared_ptr<wt> >("extinction_parameter", no_init)
         .def(init<cctbx::xray::extinction_correction<double> *>((
           arg("extinction"))));
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -205,11 +205,11 @@ namespace boost_python {
         boost::format("independent_small_%1%_vector_parameter") % N).str();
       class_<wt,
              bases<small_vector_parameter<N> >,
-             std::auto_ptr<wt> >(name.c_str(), no_init)
+             std::shared_ptr<wt> >(name.c_str(), no_init)
         .def(init<af::small<double, N> const &, optional<bool> >
              ((arg("value"), arg("variable")=true)));
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -235,11 +235,11 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
         bases<vector_parameter>,
-        std::auto_ptr<wt> >("independent_vector_parameter", no_init)
+        std::shared_ptr<wt> >("independent_vector_parameter", no_init)
         .def(init<af::shared<double> const &, optional<bool> >
         ((arg("value"), arg("variable") = true)));
       ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -281,10 +281,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<asu_site_parameter>,
-             std::auto_ptr<wt> >("independent_site_parameter", no_init)
+             std::shared_ptr<wt> >("independent_site_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -326,10 +326,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<asu_u_star_parameter>,
-             std::auto_ptr<wt> >("independent_u_star_parameter", no_init)
+             std::shared_ptr<wt> >("independent_u_star_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -368,10 +368,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
         bases<asu_anharmonic_adp_parameter>,
-        std::auto_ptr<wt> >("independent_anharmonic_adp_parameter", no_init)
+        std::shared_ptr<wt> >("independent_anharmonic_adp_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -396,10 +396,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<asu_occupancy_parameter>,
-             std::auto_ptr<wt> >("independent_occupancy_parameter", no_init)
+             std::shared_ptr<wt> >("independent_occupancy_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -424,10 +424,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
              bases<asu_u_iso_parameter>,
-             std::auto_ptr<wt> >("independent_u_iso_parameter", no_init)
+             std::shared_ptr<wt> >("independent_u_iso_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -450,10 +450,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
         bases<asu_fp_parameter>,
-        std::auto_ptr<wt> >("independent_fp_parameter", no_init)
+        std::shared_ptr<wt> >("independent_fp_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
@@ -476,10 +476,10 @@ namespace boost_python {
       using namespace boost::python;
       class_<wt,
         bases<asu_fdp_parameter>,
-        std::auto_ptr<wt> >("independent_fdp_parameter", no_init)
+        std::shared_ptr<wt> >("independent_fdp_parameter", no_init)
         .def(init<asu_parameter::scatterer_type *>(arg("scatterer")))
         ;
-      implicitly_convertible<std::auto_ptr<wt>, std::auto_ptr<parameter> >();
+      implicitly_convertible<std::shared_ptr<wt>, std::shared_ptr<parameter> >();
     }
   };
 
