@@ -15,7 +15,7 @@ jobs:
     vmImage: ubuntu-20.04
   timeoutInMinutes: 180
   strategy:
-    maxParallel: 2
+    maxParallel: 10
     matrix:
       python2.7:
         CONDA: Linux
