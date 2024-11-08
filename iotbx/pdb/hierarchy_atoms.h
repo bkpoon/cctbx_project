@@ -154,13 +154,13 @@ namespace iotbx { namespace pdb { namespace hierarchy { namespace atoms {
       ~atom_tmp_sentinel();
   };
 
-  std::auto_ptr<atom_tmp_sentinel>
+  std::shared_ptr<atom_tmp_sentinel>
   reset_tmp(
     af::const_ref<atom> const& atoms,
     int first_value=0,
     int increment=1);
 
-  std::auto_ptr<atom_tmp_sentinel>
+  std::shared_ptr<atom_tmp_sentinel>
   reset_tmp_for_occupancy_groups_simple(
     af::const_ref<atom> const& atoms);
 
