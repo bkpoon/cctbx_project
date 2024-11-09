@@ -25,7 +25,7 @@ namespace {
            cctbx::xray::scattering_type_registry const&,
            cctbx::uctbx::unit_cell const&,
            af::const_ref<cctbx::xray::scatterer<> > const&,
-           optional<double const&,
+           boost::python::optional<double const&,
                     double const&> >((
                                   arg("nx"),
                                   arg("ny"),
@@ -45,7 +45,7 @@ namespace {
            cctbx::xray::scattering_type_registry const&,
            cctbx::uctbx::unit_cell const&,
            boost::python::list const&, // BCRscatterers
-           optional<double const&,
+           boost::python::optional<double const&,
                     double const&> >((
                                   arg("nx"),
                                   arg("ny"),
