@@ -613,12 +613,12 @@ namespace scitbx { namespace af { namespace boost_python {
 
     static boost::optional<std::size_t>
     first_index_a_s(f_t const& a, e_t x) {
-      return first_index(a, std::bind2nd(std::equal_to<e_t>(), x));
+      return first_index(a, [x](const e_t& val) { return val == x; });
     }
 
     static boost::optional<std::size_t>
     last_index_a_s(f_t const& a, e_t x) {
-      return last_index(a, std::bind2nd(std::equal_to<e_t>(), x));
+      return last_index(a, [x](const e_t& val) { return val == x; });
     }
 
     static f_t neg_a(f_t const& a) { return -a; }
