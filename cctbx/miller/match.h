@@ -13,13 +13,11 @@ namespace cctbx { namespace miller {
   namespace detail {
 
     template <typename NumType>
-    struct additive_sigma : std::binary_function<NumType, NumType, NumType>
+    struct additive_sigma
     {
-      typedef std::binary_function<NumType, NumType, NumType> base_type;
-
-      typedef typename base_type::second_argument_type second_argument_type;
-      typedef typename base_type::first_argument_type first_argument_type;
-      typedef typename base_type::result_type result_type;
+      using first_argument_type = NumType;
+      using second_argument_type = NumType;
+      using result_type = NumType;
 
       NumType operator()(NumType const& x, NumType const& y)
       {
@@ -28,13 +26,11 @@ namespace cctbx { namespace miller {
     };
 
     template <typename NumType>
-    struct average : std::binary_function<NumType, NumType, NumType>
+    struct average
     {
-      typedef std::binary_function<NumType, NumType, NumType> base_type;
-
-      typedef typename base_type::second_argument_type second_argument_type;
-      typedef typename base_type::first_argument_type first_argument_type;
-      typedef typename base_type::result_type result_type;
+      using first_argument_type = NumType;
+      using second_argument_type = NumType;
+      using result_type = NumType;
 
       NumType operator()(NumType const& x, NumType const& y)
       {
@@ -45,11 +41,11 @@ namespace cctbx { namespace miller {
     template <typename Op>
     struct pair_op
     {
-      typedef typename Op::second_argument_type second_argument_type;
-      typedef typename Op::first_argument_type first_argument_type;
-      typedef typename Op::result_type result_type;
+      using second_argument_type = typename Op::second_argument_type;
+      using first_argument_type = typename Op::first_argument_type;
+      using result_type = typename Op::result_type;
 
-      pair_op(af::const_ref<pair_type> const& pairs)
+      explicit pair_op(af::const_ref<pair_type> const& pairs)
       : pairs_(pairs)
       {}
 
