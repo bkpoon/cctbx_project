@@ -2,20 +2,20 @@
 #   modules: <modules artifact name>
 
 jobs:
-  - template: ./conda-win.yml
-    parameters:
-      vmImage: windows-2019
-      vs: 2019
-      modules: modules
+  # - template: ./conda-win.yml
+  #   parameters:
+  #     vmImage: windows-2019
+  #     vs: 2019
+  #     modules: modules
   - template: ./conda-linux.yml
     parameters:
-      distribution: rockylinux
-      version: [8]
+      distribution: ubuntu
+      version: ['24', '04']
       modules: ${{ parameters.modules }}
       template: ./unix-conda-build.yml
-  - template: ./conda-osx.yml
-    parameters:
-      vmImage: [13]
-      xcode_version: [14, 3, 1]
-      modules: modules
-      template: ./unix-conda-build.yml
+  # - template: ./conda-osx.yml
+  #   parameters:
+  #     vmImage: [13]
+  #     xcode_version: [14, 3, 1]
+  #     modules: modules
+  #     template: ./unix-conda-build.yml
