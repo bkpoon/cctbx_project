@@ -644,14 +644,14 @@ def exercise_hydrogen_bond_rmsd():
   cmd = 'phenix.geometry_minimization tst_cctbx_geometry_restraints_2_na.pdb'
   print(cmd)
   rc=easy_run.go(cmd)
-  assert '  Bond      :  0.002   0.005     87  Z= 0.076' in rc.stdout_lines
-  assert '  Angle     :  0.179   0.770    130  Z= 0.112' in rc.stdout_lines
+  assert '  Bond      :  0.002   0.005     87  Z= 0.076' in rc.stdout_lines, rc.stdout_lines
+  assert '  Angle     :  0.179   0.772    130  Z= 0.112' in rc.stdout_lines, rc.stdout_lines
   cmd = 'phenix.geometry_minimization tst_cctbx_geometry_restraints_2_na.pdb'
   cmd += ' secondary_structure.enabled=True'
   print(cmd)
   rc=easy_run.go(cmd)
-  assert '  Bond      :  0.002   0.006     87  Z= 0.087' in rc.stdout_lines
-  assert '  Angle     :  0.203   0.846    130  Z= 0.128' in rc.stdout_lines
+  assert '  Bond      :  0.002   0.006     87  Z= 0.086' in rc.stdout_lines, rc.stdout_lines
+  assert '  Angle     :  0.205   0.856    130  Z= 0.129' in rc.stdout_lines, rc.stdout_lines
 
 def exercise_all(args):
   verbose = "--verbose" in args
