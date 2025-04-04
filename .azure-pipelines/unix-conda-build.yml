@@ -194,7 +194,7 @@ steps:
       if [ -d $(Pipeline.Workspace)/miniforge/envs/compiler ]; then
         conda remove  -y --all -n compiler
       fi
-      conda create -y -n compiler cxx-compiler
+      conda create -y -n compiler cxx-compiler libxml2
       conda activate compiler
     fi
 
