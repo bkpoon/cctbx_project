@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 import subprocess
 
 from libtbx.queuing_system_utils.processing import errors
-
+from libtbx.utils import to_bytes
 
 class Submission(object):
   """
@@ -131,7 +131,7 @@ class AsynchronousCmdLine(Submission):
     ( process, outfile, errfile ) = self.create( name = name )
 
     ( out, err ) = process.communicate(
-      input = self.handler.script( include = include, executable = executable, script = script, cwd = self.cwd )
+      input = to_bytes(self.handler.script( include = include, executable = executable, script = script, cwd = self.cwd ))
       )
 
     if process.poll():
