@@ -375,7 +375,7 @@ def exercise_restrained_refinement(options):
   sc = ls.xray_structure.scatterers()
   for p in bond_proxies:
     d = uc.distance(*[ sc[i_pair].site for i_pair in p.i_seqs ])
-    assert approx_equal(d, p.distance_ideal, eps)
+    assert approx_equal(d, p.distance_ideal, eps), (d, p.distance_ideal, eps)
 
   ls = ls_problem()
   t = wall_clock_time()
