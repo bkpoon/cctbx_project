@@ -25,6 +25,11 @@ jobs:
   - script: |
       cd $(Pipeline.Workspace)
       python bootstrap.py hot update --builder=cctbx --python=38 ${{ parameters.flags }}
+      cd $(Pipeline.Workspace)/modules/cctbx_project/libtbx
+      # Remove /fp:fast
+      sed -i 's/\/fp:fast//g' SConscript
+      # Change /O2 to /O1
+      sed -i 's/\/O2/\/O1/g' SConscript
     displayName: Download sources
 
   - script: |
