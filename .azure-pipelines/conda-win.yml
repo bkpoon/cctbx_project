@@ -219,6 +219,7 @@ jobs:
         fable ^
         rstbx ^
         spotfinder ^
+        tntbx ^
         cbflib_adaptbx ^
         phenix_regression ^
         phenix_examples
@@ -258,10 +259,13 @@ jobs:
       mkdir tests
       cd tests
       call libtbx.run_tests_parallel ^
+        module=annlib_adaptbx ^
         module=boost_adaptbx ^
+        module=cbflib_adaptbx ^
         module=cctbx ^
         module=cctbx_website ^
         module=cma_es ^
+        module=crys3d ^
         module=fable ^
         module=gltbx ^
         module=iotbx ^
@@ -270,9 +274,7 @@ jobs:
         module=scitbx ^
         module=smtbx ^
         module=spotfinder ^
-        module=annlib_adaptbx ^
-        module=cbflib_adaptbx ^
-        module=crys3d ^
+        module=tntbx ^
         nproc=4
     failOnStderr: false
     displayName: Test

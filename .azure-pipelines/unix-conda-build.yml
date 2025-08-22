@@ -176,6 +176,7 @@ steps:
       fable \
       rstbx \
       spotfinder \
+      tntbx \
       cbflib_adaptbx \
       phenix_regression \
       phenix_examples
@@ -239,15 +240,16 @@ steps:
       module=cctbx \
       module=cctbx_website \
       module=cma_es \
+      module=crys3d \
       module=fable \
       module=gltbx \
       module=iotbx \
       module=libtbx \
       module=rstbx \
       module=scitbx \
-      module=crys3d \
       module=smtbx \
       module=spotfinder \
+      module=tntbx \
       nproc=4
   failOnStderr: false
   displayName: Test
