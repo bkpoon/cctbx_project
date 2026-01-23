@@ -2495,18 +2495,10 @@ class PhenixBuilder(CCIBuilder):
       else:
         os.environ['PATH'] = os.path.abspath(dev_env) + ':'  + os.environ['PATH']
 
-      svn_is_available = False
       git_lfs_is_available = False
 
-      # check if git-lfs and svn are available
+      # check if git-lfs is available
       log = open(os.devnull, 'w')
-
-      try:
-        returncode = subprocess.call(['svn', '--version'], stdout=log, stderr=log)
-        if returncode == 0:
-          svn_is_available = True
-      except Exception:
-        pass
 
       try:
         returncode = subprocess.call(['git', 'lfs', '--version'], stdout=log, stderr=log)
@@ -2519,7 +2511,7 @@ class PhenixBuilder(CCIBuilder):
 
       # set if dev_env will be created in base step
       self.install_dev_env = False
-      if not svn_is_available or not git_lfs_is_available:
+      if not git_lfs_is_available:
         self.install_dev_env = True
 
       # get lfs files
@@ -3056,8 +3048,8 @@ def run(root=None):
                     default=False)
   python_args = parser.add_mutually_exclusive_group(required=False)
   python_args.add_argument('--python',
-                    default='37', type=str, nargs='?', const='37',
-                    choices=['27', '37', '38', '39', '310', '311', '312', '313'],
+                    default='311', type=str, nargs='?', const='311',
+                    choices=['39', '310', '311', '312', '313'],
                     help="""When set, a specific Python version of the
 conda environment will be used. This only affects environments selected with
 the --builder flag. For non-conda dependencies, any Python 3 implies
@@ -3079,7 +3071,7 @@ building, $CONDA_PREFIX should be the argument for this flag. Otherwise, a new
 environment will be created. The --python flag will be ignored when there is
 an argument for this flag. Specifying an environment is for developers that
 maintain their own conda environment.""",
-                    default=None, nargs='?', const='')
+                    default='', nargs='?', const='')
   parser.add_argument("--no-boost-src", "--no_boost_src",
                       dest="no_boost_src",
                       help="""When set, the reduced Boost source code is not
