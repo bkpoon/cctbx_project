@@ -1,3 +1,31 @@
+2026.1
+======
+
+* Improvements to variable resolution map calculation
+* Fix bug in counting atoms split across chains with the same chain ID
+* Fix bug in reading MRC files with 16-bit floats
+
+2025.12
+=======
+
+* Polder maps: stop when data is twinned
+* mmtbx.table_one: fix bug with twinned data and using model header information
+* Speed up variable resolution map calculation
+
+2025.11
+=======
+
+* Print additional information from DiSCaMB
+* More developments in QM restraints
+
+2025.10
+=======
+
+* Added mmtbx.reduce_cryoem_resolution for creating lower resolution maps
+  from existing maps
+* Initial support for Python 3.14
+* General wxPython syntax updates in wxtbx
+
 2025.9
 ======
 

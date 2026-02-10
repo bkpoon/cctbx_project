@@ -323,20 +323,34 @@ def warn_if_unexpected_md5_hexdigest(
   print("*"*width, file=out)
   return True
 
-def md5_hexdigest(filename=None, blocksize=256):
-  """ Compute the MD5 hexdigest of the content of the given file,
-      efficiently even for files much larger than the available RAM.
-
-      The file is read by chunks of `blocksize` MB.
+def file_hexdigest(filename=None, algorithm=None, blocksize=256):
+  """
+  Compute the hexdigest in blocksize (MB) chunks
   """
   blocksize *= 1024**2
-  m = hashlib.md5()
+  m = algorithm()
   with open(filename, 'rb') as f:
     buf = f.read(blocksize)
     while buf:
       m.update(buf)
       buf = f.read(blocksize)
   return m.hexdigest()
+
+def md5_hexdigest(filename=None, blocksize=256):
+  """ Compute the MD5 hexdigest of the content of the given file,
+      efficiently even for files much larger than the available RAM.
+
+      The file is read by chunks of `blocksize` MB.
+  """
+  return file_hexdigest(filename=filename, algorithm=hashlib.md5, blocksize=blocksize)
+
+def sha256_hexdigest(filename, blocksize=256):
+  """ Compute the sha256 hexdigest of the content of the given file,
+      efficiently even for files much larger than the available RAM.
+
+      The file is read by chunks of `blocksize` MB.
+  """
+  return file_hexdigest(filename=filename, algorithm=hashlib.sha256, blocksize=blocksize)
 
 def get_memory_from_string(mem_str):
   """
@@ -2418,8 +2432,7 @@ def to_unicode(text, codec=None, errors='replace'):
       new_text = text.decode(codec, errors)
     except UnicodeDecodeError: # in case errors='strict'
       raise Sorry('Unable to decode text with %s' % codec)
-    finally:
-      return new_text
+    return new_text
   elif (text is not None):
     return unicode(text)
   else:
@@ -2457,8 +2470,7 @@ def to_bytes(text, codec=None, errors='replace'):
       new_text = text.encode(codec, errors)
     except UnicodeEncodeError: # in case errors='strict'
       raise Sorry('Unable to encode text with %s' % codec)
-    finally:
-      return new_text
+    return new_text
   elif (text is not None):
     return bytes(text)
   else:

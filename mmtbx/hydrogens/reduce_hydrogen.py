@@ -108,14 +108,26 @@ def get_h_restraints(resname, strict=True):
       period='1'))
   return comp_comp_id
 
-def bonds_in_restraints(atom):
+def atom_in_restraints(name, cc_cif):
+  for a in cc_cif.get('_chem_comp_atom',[]):
+    if a.atom_id==name:
+      return a
+  return None
+
+def bonds_in_restraints(atom, exclude_hydrogens=False):
   from mmtbx.chemical_components import get_cif_dictionary
   cc_cif = get_cif_dictionary(atom.parent().resname)
   rc=[]
   for b in cc_cif.get('_chem_comp_bond',[]):
     if b.atom_id_1.strip()==atom.name.strip():
+      if exclude_hydrogens:
+        a=atom_in_restraints(b.atom_id_2, cc_cif)
+        if a.type_symbol in ['H', 'D']: continue
       rc.append(b.atom_id_2)
     if b.atom_id_2.strip()==atom.name.strip():
+      if exclude_hydrogens:
+        a=atom_in_restraints(b.atom_id_1, cc_cif)
+        if a.type_symbol in ['H', 'D']: continue
       rc.append(b.atom_id_1)
   return rc
 
@@ -311,7 +323,9 @@ class place_hydrogens():
       restraint_objects = ro,
       log               = null_out())
     self.model.process(pdb_interpretation_params=p,
-                       make_restraints=True)
+                       make_restraints=True,
+                       # retain_zero_dihedrals=True,
+                       )
     #self.model.idealize_h_minimization()
     #STOP()
     self.time_make_grm = round(time.time()-t0, 2)
@@ -338,6 +352,9 @@ class place_hydrogens():
 
     sel_h = self.model.get_hd_selection()
 
+    #f = open("intermediate3a.pdb","w")
+    #f.write(self.model.model_as_pdb())
+
     # Setup riding H manager
     # ----------------------
     t0 = time.time()
@@ -361,8 +378,8 @@ class place_hydrogens():
       self.model = self.model.select(~sel_h_not_in_para)
     self.time_remove_H_nopara = round(time.time()-t0, 2)
 
-  #  f = open("intermediate4.pdb","w")
-  #  f.write(model.model_as_pdb())
+    #f = open("intermediate4.pdb","w")
+    #f.write(self.model.model_as_pdb())
 
 # to be removed; was for curiosity only
 #    if self.validate_e:
@@ -374,7 +391,7 @@ class place_hydrogens():
     # Reset occupancies, ADPs and idealize H atom positions
     # -----------------------------------------------------
     t0 = time.time()
-    self.model.reset_adp_for_hydrogens(scale = self.adp_scale)
+    self.model.reset_adp_for_hydrogens(scale = self.adp_scale, keep_aniso=True)
     self.model.reset_occupancy_for_hydrogens_simple()
     self.time_reset = round(time.time()-t0, 2)
     t0 = time.time()
@@ -389,8 +406,8 @@ class place_hydrogens():
 
 
     # TODO: this should be ideally done *after* reduce optimization
-    if not self.exclude_water:
-      self.model.add_hydrogens(1., occupancy=0.)
+    #if not self.exclude_water:
+    #  self.model.add_hydrogens(1., occupancy=0.)
 
     self.n_H_final = self.model.get_hd_selection().count(True)
 
@@ -413,15 +430,16 @@ class place_hydrogens():
         elif (self.n_terminal_charge == 'first_in_chain'):
           pass
         for ag in rgs.atom_groups():
-          #if ag.resname == 'AYA': return
-          # SAC in 5xdq, 5zcp. Never needs propeller.
-          if ag.resname == 'SAC': return
-          #for ag in rgs.atom_groups():
-          #  n=ag.get_atom('N') # assumes atom name "N"
-          #  if n: break
-          #if not n: continue
-          #bonds=bonds_in_restraints(n)
-          #if len(bonds)==3: continue
+          # SAC in 5xdq, 5zcp. Never needs propeller. Also AYA
+          for ag in rgs.atom_groups():
+            n=ag.get_atom('N') # assumes atom name "N"
+            if n: break
+          if not n: continue
+          bonds=bonds_in_restraints(n, exclude_hydrogens=True)
+          heavies=2
+          if ag.resname in ['PRO']: # needs a PRO child lookup
+            heavies=3
+          if len(bonds)>=heavies: continue
           if (get_class(name=ag.resname) in
               ['common_amino_acid', 'modified_amino_acid', 'd_amino_acid']):
             if ag.get_atom('H'):

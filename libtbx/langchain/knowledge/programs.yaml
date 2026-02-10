@@ -1,0 +1,1555 @@
+# =============================================================================
+# PHENIX AI Agent - Program Definitions
+# =============================================================================
+# This file defines all programs the agent can use.
+# Each program specifies:
+#   - What it does (description)
+#   - What files it needs (inputs)
+#   - What it produces (outputs)
+#   - How to build the command (command template)
+#   - How to extract metrics from its log (log_parsing)
+#
+# To add a new program, copy an existing entry and modify it.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# DATA ANALYSIS PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.xtriage:
+  description: "Analyze X-ray data quality, detect twinning and anomalous signal"
+  category: analysis
+  experiment_types: [xray]
+  run_once: true  # Only run once per workflow
+
+  inputs:
+    required:
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: ""
+        description: "Reflection data with Fobs for analysis"
+    optional:
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "scaling.input.asu_contents.sequence_file="
+
+  outputs:
+    metrics:
+      - resolution
+      - completeness
+      - twinning  # Extracted by hardcoded table parser in log_parsers.py
+      - twin_fraction
+      - twin_law
+      - anomalous_measurability  # Extracted by hardcoded table parser in log_parsers.py
+      - space_group
+
+  command: "phenix.xtriage {data_mtz}"
+
+  log_parsing:
+    resolution:
+      pattern: 'High resolution limit\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Resolution"
+      summary_format: "{value:.2f} Å"
+    completeness:
+      pattern: '[Cc]ompleteness\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Completeness"
+      summary_format: "{value:.1f}%"
+    twin_fraction:
+      # Note: Primary extraction is done by log_parsers.py table parsing
+      # This pattern is a fallback for simple cases
+      pattern: '(?:Britton alpha|Twin fraction)[:\s=]+([0-9.]+)'
+      type: float
+      display_name: "Twin Fraction"
+      summary_format: "{value:.4f}"
+    twin_law:
+      # Note: Primary extraction is done by log_parsers.py table parsing
+      # which finds the operator with the highest Britton alpha
+      # This pattern is a fallback only
+      pattern: "Twin law\\s*[=:]\\s*([hkl0-9,/\\*+-]+)"
+      type: string
+      display_name: "Twin Law"
+    space_group:
+      pattern: 'Space group\s*[=:]\s*([^\n]+)'
+      type: string
+      display_name: "Space Group"
+    no_twinning_suspected:
+      pattern: 'No twinning suspected'
+      type: boolean
+      display_name: "No Twinning"
+    # Note: anomalous_measurability is extracted by log_parsers.py
+    # using table parsing, not a simple regex pattern
+
+
+phenix.mtriage:
+  description: "Analyze cryo-EM map quality and estimate resolution"
+  category: analysis
+  experiment_types: [cryoem]
+  run_once: true  # Only run once per workflow - don't re-run after other programs
+
+  inputs:
+    optional:
+      full_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: "full_map="
+        exclude_patterns: [half, _1, _2, _a, _b]
+      half_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: "half_map="
+        multiple: true
+
+  # IMPORTANT: half_maps must come from the same reconstruction as full_map
+  # Do not mix density-modified maps with original half-maps
+  hints:
+    - "Run once at the start to get resolution"
+    - "Do not re-run after refinement or map optimization"
+    - "Half-maps must match full_map dimensions"
+
+  outputs:
+    metrics:
+      - resolution
+      - map_cc
+
+  command: "phenix.mtriage {half_map} {full_map}"
+
+  log_parsing:
+    resolution:
+      pattern: 'd_fsc_model(?:_05|_0.5)?[=:\s]+([0-9.]+)'
+      type: float
+      fallback_pattern: 'd99[=:\s]+([0-9.]+)'
+      display_name: "Resolution"
+      summary_format: "{value:.2f} Å"
+    map_cc:
+      pattern: 'CC_mask\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Map CC"
+      summary_format: "{value:.3f}"
+
+
+phenix.map_symmetry:
+  description: "Find point-group symmetry in cryo-EM map"
+  category: analysis
+  experiment_types: [cryoem]
+  run_once: true  # Only run once - symmetry doesn't change
+
+  inputs:
+    required:
+      map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+
+  # Prefer full map over half-maps for symmetry detection
+  input_priorities:
+    map:
+      categories: [full_map, optimized_full_map, map]
+      exclude_categories: [half_map]
+
+  outputs:
+    files:
+      - pattern: "*.ncs_spec"
+        type: ncs_spec
+    metrics:
+      - symmetry_type
+
+  command: "phenix.map_symmetry {map}"
+
+  strategy_flags:
+    resolution:
+      flag: "resolution={value}"
+      type: float
+    ncs_type:
+      flag: "ncs_type={value}"
+      type: string
+      hint: "Expected symmetry type (e.g., C2, D2, C3, etc.)"
+
+  log_parsing:
+    symmetry_type:
+      # Match "NCS type: D7 (a)" or "D7 (a)  Best NCS type"
+      pattern: 'NCS\s+type[:\s]+([A-Z]\d+(?:\s*\([a-z]\))?)|([A-Z]\d+(?:\s*\([a-z]\))?)\s+Best\s+NCS'
+      type: string
+      display_name: "Symmetry Type"
+      summary_format: "{value}"
+      no_match_pattern: 'No suitable symmetry found|No symmetry found'
+      no_match_value: "None"
+    ncs_copies:
+      # Match "Copies: 14" or "OPERATORS" column value
+      pattern: 'Copies[:\s]+(\d+)|OPERATORS\s+SYMMETRY\s+[\d.]+\s+[\d.]+\s+(\d+)'
+      type: int
+      display_name: "NCS Copies"
+      summary_format: "{value} copies"
+    ncs_cc:
+      # Match "Correlation of symmetry-related regions: 0.93" or CC column
+      pattern: 'Correlation[^:]*:\s*([0-9.]+)|CC\s+OPERATORS\s+[\d.]+\s+([0-9.]+)'
+      type: float
+      display_name: "NCS CC"
+      summary_format: "CC: {value:.2f}"
+
+  hints:
+    - "Run on full map to detect point-group symmetry"
+    - "Output .ncs_spec file can be used by resolve_cryo_em, predict_and_build, or apply_ncs"
+    - "Optional: specify expected ncs_type if known (C2, D2, C3, etc.)"
+
+  user_advice_keywords:
+    - "symmetry"
+    - "symmetric"
+    - "oligomer"
+    - "dimer"
+    - "trimer"
+    - "tetramer"
+    - "ncs"
+    - "non-crystallographic"
+
+
+# -----------------------------------------------------------------------------
+# MODEL BUILDING PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.predict_and_build:
+  description: "AlphaFold prediction and automatic model building"
+  category: model_building
+  experiment_types: [xray, cryoem]
+
+  inputs:
+    required:
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "input_files.seq_file="
+    optional:
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: "input_files.xray_data_file="
+        description: "Reflection data with Fobs for X-ray workflows"
+      full_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: "map_model.full_map="
+      half_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: "map_model.half_map="
+        multiple: true
+      ncs_spec:
+        extensions: [.ncs_spec]
+        flag: "map_model.ncs_file="
+
+  outputs:
+    files:
+      - pattern: "*overall_best*.pdb"
+        type: model
+      - pattern: "*_predicted_model*.pdb"
+        type: model
+      - pattern: "*_map.ccp4"
+        type: map
+      - pattern: "*_refinement.mtz"
+        type: data_mtz
+        description: "Reflection data with R-free flags"
+      - pattern: "*_map_coeffs.mtz"
+        type: map_coeffs_mtz
+        description: "Map coefficients (FP/PHIFP)"
+    metrics:
+      - r_free
+      - r_work
+      - map_cc
+
+  command: "phenix.predict_and_build {sequence} {data_mtz} {full_map} {half_map} {ncs_spec}"
+
+  defaults:
+    control.nproc: 4
+
+  strategy_flags:
+    stop_after_predict:
+      flag: "predict_and_build.stop_after_predict={value}"
+      type: boolean
+      hint: "Set True to only get AlphaFold model without building"
+    resolution:
+      flag: "crystal_info.resolution={value}"
+      type: float
+      hint: "Required unless stop_after_predict=True"
+    quick:
+      flag: "quick={value}"
+      type: boolean
+    nproc:
+      flag: "control.nproc={value}"
+      type: int
+
+  # Invariants are checked before building command
+  # If violated, the fix is applied automatically
+  invariants:
+    - name: data_or_predict_only
+      description: "Must have data file OR stop_after_predict=True"
+      check:
+        any_of:
+          - has_file: [data_mtz, full_map, half_map]
+          - strategy_equals: {stop_after_predict: true}
+      fix:
+        set_strategy: {stop_after_predict: true}
+      message: "No data file provided, switching to prediction-only mode"
+
+    - name: resolution_when_building
+      description: "Resolution required when building (not just predicting)"
+      check:
+        any_of:
+          - strategy_equals: {stop_after_predict: true}
+          - has_strategy: resolution
+      fix:
+        auto_fill_resolution: true
+      message: "Resolution required for model building"
+
+  # Keywords in user advice that indicate this program should be preferred
+  user_advice_keywords:
+    - "alphafold"
+    - "predict"
+    - "prediction"
+    - "ai model"
+    - "predicted model"
+
+  hints:
+    - "If stop_after_predict=False (default), resolution is REQUIRED"
+    - "Resolution can be found in xtriage/mtriage output"
+    - "For cryo-EM: use full_map or half_map (or both)"
+
+  log_parsing:
+    r_free:
+      pattern: 'R-free\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last  # predict_and_build runs internal refinement; take final value
+      display_name: "R-free"
+      summary_format: "R-free: {value:.4f}"
+    r_work:
+      pattern: 'R-work\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "R-work"
+      summary_format: "R-work: {value:.4f}"
+    map_cc:
+      pattern: '(?:CC_mask|[Mm]ap[-_\s]?CC|[Mm]odel[-_\s]?vs[-_\s]?map\s+CC)\s*[:=]?\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Map CC"
+
+
+phenix.phaser:
+  description: "Molecular replacement to place a search model"
+  category: model_building
+  experiment_types: [xray]
+  multi_ensemble: true  # Supports multiple search models as ensembles
+
+  inputs:
+    required:
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: ""
+        description: "Reflection data with Fobs for MR"
+      model:
+        extensions: [.pdb]
+        flag: ""
+        multiple: true  # Multiple search models allowed
+    optional:
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: ""
+        multiple: true  # Multiple sequences allowed for composition
+
+  # Input priorities for molecular replacement
+  # 
+  # IMPORTANT: Phaser uses SEARCH MODELS (templates) to find the position
+  # These are NOT yet positioned in the unit cell - that's what Phaser does!
+  # The output PHASER.*.pdb IS a positioned model (category: model)
+  input_priorities:
+    model:
+      # Use semantic parent category - MR needs SEARCH MODELS (templates)
+      categories: [search_model]
+      # Subcategory preference: processed_predicted > pdb_template > predicted
+      prefer_subcategories: [processed_predicted, pdb_template, predicted]
+      # Can also accept positioned models as templates (less common but valid)
+      fallback_categories: [model]
+      # Exclude ligands - they are NOT search models!
+      exclude_categories: [ligand, ligand_pdb, ligand_cif, ligand_fit]
+    data_mtz:
+      categories: [data_mtz]  # Original data with Fobs
+
+  outputs:
+    files:
+      - pattern: "PHASER.*.pdb"
+        type: model
+      - pattern: "PHASER.*.mtz"
+        type: data_mtz
+        description: "Phased data (has Fobs + experimental phases, may lack R-free)"
+    metrics:
+      - tfz
+      - llg
+      - rfz
+
+  command: "phenix.phaser {data_mtz} {model} {sequence}"
+
+  defaults:
+    phaser.mode: "MR_AUTO"
+
+  strategy_flags:
+    component_copies:
+      flag: "phaser.ensemble.copies={value}"
+      type: int
+    output_root:
+      flag: "phaser.root={value}"
+      type: string
+      hint: "Output filename prefix (default: PHASER)."
+
+  # Keywords in user advice that indicate this program should be preferred
+  user_advice_keywords:
+    - "molecular replacement"
+    - "phaser"
+    - "mr"
+    - "search model"
+
+  log_parsing:
+    tfz:
+      pattern: 'TFZ==?([0-9.]+)'
+      type: float
+      extract: last  # Take the last value (final refined TFZ)
+      display_name: "TFZ Score"
+      summary_format: "TFZ: {value:.1f}"
+    llg:
+      pattern: 'LLG=([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "LLG"
+      summary_format: "LLG: {value:.0f}"
+    rfz:
+      pattern: 'RFZ=([0-9.]+)'
+      type: float
+      display_name: "RFZ Score"
+      summary_format: "RFZ: {value:.1f}"
+    space_group:
+      pattern: 'SOLU SPAC\s+(.+?)(?:\n|$)'
+      type: string
+      display_name: "Space Group"
+
+
+phenix.autobuild:
+  description: "Iterative model building and refinement"
+  category: model_building
+  experiment_types: [xray]
+
+  inputs:
+    required:
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: "data="
+        description: "Reflection data - prefer phased MTZ from phaser/refine"
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "seq_file="
+    optional:
+      model:
+        extensions: [.pdb]
+        flag: "model="
+        priority_patterns: [refine, PHASER]
+
+  # Input priorities for autobuild
+  input_priorities:
+    model:
+      categories: [refined, phaser_output, autobuild_output, pdb]
+      exclude_categories: [predicted]  # Raw predictions not suitable
+    data_mtz:
+      categories: [phased_data_mtz, original_data_mtz, data_mtz]  # Prefer phased data
+
+  outputs:
+    files:
+      - pattern: "*overall_best*.pdb"
+        type: model
+      - pattern: "*overall_best*.mtz"
+        type: data_mtz
+    metrics:
+      - r_free
+      - r_work
+
+  command: "phenix.autobuild {data_mtz} {sequence} {model}"
+
+  defaults:
+    nproc: 4
+
+  strategy_flags:
+    quick:
+      flag: "quick={value}"
+      type: boolean
+    nproc:
+      flag: "nproc={value}"
+      type: int
+    resolution:
+      flag: "resolution={value}"
+      type: float
+
+  hints:
+    - "REQUIRES phased MTZ (from phaser or refine output)"
+    - "Will not work with raw F/SIGF data"
+    - "If a refined model exists, include it for better results"
+
+  log_parsing:
+    r_free:
+      pattern: 'R-free\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "R-free"
+    r_work:
+      pattern: 'R-work\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "R-work"
+    residues_built:
+      pattern: '(\d+)\s+residues?\s+built'
+      type: int
+      extract: last
+      display_name: "Residues built"
+
+
+# X-ray density modification using autobuild in maps_only mode
+phenix.autobuild_denmod:
+  description: "Density modification for X-ray data (map improvement without model building)"
+  category: map_improvement
+  experiment_types: [xray]
+
+  inputs:
+    required:
+      data_mtz:
+        extensions: [.mtz]
+        flag: "data="
+        description: "Reflection data - need phased MTZ from phaser/refine"
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "seq_file="
+    optional:
+      model:
+        extensions: [.pdb]
+        flag: "model="
+        priority_patterns: [refine, PHASER]
+
+  input_priorities:
+    data_mtz:
+      categories: [phased_data_mtz, original_data_mtz, data_mtz]
+
+  outputs:
+    files:
+      - pattern: "*overall_best_denmod_map_coeffs.mtz"
+        type: map_coeffs_mtz
+        description: "Density-modified map coefficients (FWT/PHFWT)"
+    metrics: []
+
+  command: "phenix.autobuild {data_mtz} {sequence} {model} maps_only=True"
+
+  defaults:
+    nproc: 4
+
+  strategy_flags:
+    nproc:
+      flag: "nproc={value}"
+      type: int
+    resolution:
+      flag: "resolution={value}"
+      type: float
+
+  hints:
+    - "Runs density modification only - no model building"
+    - "REQUIRES phased MTZ (from phaser or refine output)"
+    - "Output is overall_best_denmod_map_coeffs.mtz"
+    - "Use for map improvement before manual model building"
+
+
+phenix.autosol:
+  description: "Experimental phasing (SAD/MAD) for when data has anomalous signal"
+  category: model_building
+  experiment_types: [xray]
+
+  inputs:
+    required:
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: "autosol.data="
+        description: "Reflection data with anomalous signal"
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "seq_file="
+
+  outputs:
+    files:
+      - pattern: "*overall_best*.pdb"
+        type: model
+      - pattern: "*refinement_data*.mtz"
+        type: data_mtz
+        description: "Phased data with Fobs"
+    metrics:
+      - fom
+      - sites_found
+
+  command: "phenix.autosol {data_mtz} {sequence}"
+
+  defaults:
+    nproc: 4
+
+  strategy_flags:
+    atom_type:
+      flag: "autosol.atom_type={value}"
+      type: string
+      hint: "Primary anomalous scatterer: Se, S, Zn, Fe, etc. (single atom type only)"
+    additional_atom_types:
+      flag: "mad_ha_add_list={value}"
+      type: string
+      hint: "Additional atom types to search for (e.g., S for sulfur in addition to Se)"
+    resolution:
+      flag: "resolution={value}"
+      type: float
+    wavelength:
+      flag: "autosol.lambda={value}"
+      type: float
+      hint: "X-ray wavelength in Angstroms"
+    sites:
+      flag: "autosol.sites={value}"
+      type: int
+      hint: "Expected number of anomalous sites"
+    quick:
+      flag: "quick={value}"
+      type: boolean
+    nproc:
+      flag: "nproc={value}"
+      type: int
+
+  # Keywords in user advice that indicate this program should be preferred
+  user_advice_keywords:
+    - "experimental phasing"
+    - "sad phasing"
+    - "mad phasing"
+    - "autosol"
+    - "anomalous"
+    - "se-met"
+    - "selenomethionine"
+    - "sulfur sad"
+    - "s-sad"
+
+  hints:
+    - "Use for SAD/MAD when data has anomalous signal"
+    - "Requires anomalous data (F+/F- or I+/I-)"
+    - "Set atom_type to the anomalous scatterer"
+
+  log_parsing:
+    fom:
+      pattern: '[Ff]igure\s+of\s+[Mm]erit\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Figure of merit"
+    sites_found:
+      pattern: '(\d+)\s+(?:heavy\s+atom\s+)?sites?\s+found'
+      type: int
+      extract: last
+      display_name: "Sites found"
+    bayes_cc:
+      pattern: 'BAYES-CC\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "BAYES-CC"
+
+
+phenix.dock_in_map:
+  description: "Dock a model into a cryo-EM map"
+  category: model_building
+  experiment_types: [cryoem]
+  requires_full_map: true  # Cannot use half-maps - too noisy for docking
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb]
+        flag: ""
+      map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+    optional:
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: ""
+
+  # Input priorities for docking
+  # 
+  # IMPORTANT: dock_in_map uses SEARCH MODELS (templates) to find the position
+  # These are NOT yet positioned in the map box - that's what docking does!
+  # The output placed_model.pdb IS a positioned model (category: model)
+  input_priorities:
+    model:
+      # Use semantic parent category - docking needs SEARCH MODELS (templates)
+      categories: [search_model]
+      # Subcategory preference: processed_predicted > pdb_template > predicted
+      prefer_subcategories: [processed_predicted, pdb_template, predicted]
+      # Exclude ligands and intermediates
+      exclude_categories: [ligand, ligand_pdb, ligand_cif, intermediate_mr]
+    map:
+      categories: [full_map, optimized_full_map, map]
+      exclude_categories: [half_map]  # Half-maps are too noisy for docking
+
+  outputs:
+    files:
+      - pattern: "placed_model*.pdb"
+        type: model
+      - pattern: "*docked*.pdb"
+        type: model
+    metrics:
+      - map_cc
+
+  command: "phenix.dock_in_map {model} {map} {sequence}"
+
+  strategy_flags:
+    resolution:
+      flag: "resolution={value}"
+      type: float
+      required: true
+      hint: "REQUIRED - get from mtriage"
+
+  invariants:
+    - name: requires_resolution
+      description: "Resolution parameter is required for dock_in_map"
+      check:
+        has_strategy: resolution
+      fix:
+        auto_fill_resolution: true
+      message: "Resolution required for dock_in_map"
+
+    - name: requires_full_map
+      description: "dock_in_map requires a full map, not half-maps"
+      check:
+        has_file_category: [full_map, optimized_full_map, map]
+        not_has_file_category_only: half_map
+      message: "dock_in_map requires a full map. Run resolve_cryo_em or map_sharpening first to combine half-maps."
+
+  hints:
+    - "Resolution is REQUIRED - get it from mtriage"
+    - "Requires a FULL map - if only half-maps available, run resolve_cryo_em first"
+
+  log_parsing:
+    map_cc:
+      pattern: '(?:CC_mask|[Mm]ap[-_\s]?CC|[Mm]odel[-_\s]?vs[-_\s]?map\s+CC)\s*[:=]?\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Map CC"
+
+
+phenix.map_to_model:
+  description: "Build atomic model directly into cryo-EM map"
+  category: model_building
+  experiment_types: [cryoem]
+
+  inputs:
+    required:
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "seq_file="
+    optional:
+      full_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+      half_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+        multiple: true
+      partial_model:
+        extensions: [.pdb]
+        flag: "input_files.partial_model="
+        description: "Partial model to extend (rarely needed)"
+        auto_fill: false
+
+  # Must have either full_map or half_maps
+  input_priorities:
+    full_map:
+      categories: [full_map, optimized_full_map, map]
+      exclude_categories: [half_map]
+    half_map:
+      categories: [half_map]
+
+  outputs:
+    files:
+      - pattern: "map_to_model*.pdb"
+        type: model
+      - pattern: "*.pdb"
+        type: model
+    metrics:
+      - map_cc
+
+  command: "phenix.map_to_model {full_map} {half_map} {sequence} {partial_model}"
+
+  defaults:
+    nproc: 4
+
+  strategy_flags:
+    resolution:
+      flag: "resolution={value}"
+      type: float
+    nproc:
+      flag: "nproc={value}"
+      type: int
+
+  invariants:
+    - name: requires_map_input
+      description: "Requires either a full map or half-maps"
+      check:
+        any_of:
+          - has_file: full_map
+          - has_file: half_map
+      message: "map_to_model requires either a full map or half-maps"
+
+    - name: requires_resolution
+      description: "Resolution parameter is required for map_to_model"
+      check:
+        has_strategy: resolution
+      fix:
+        auto_fill_resolution: true
+      message: "Resolution required for map_to_model"
+
+  hints:
+    - "Can use full map OR two half-maps (half-maps provide better weighting)"
+    - "Resolution is REQUIRED - get it from mtriage"
+    - "NCS symmetry (ncs_spec) is NOT used here - apply it later with apply_ncs if needed"
+    - "Do NOT use model= parameter. This is de novo model building - no input model needed"
+    - "If a partial model is provided, use input_files.partial_model= (very rare)"
+
+  log_parsing:
+    map_cc:
+      pattern: '(?:CC_mask|[Mm]ap[-_\s]?CC|[Mm]odel[-_\s]?vs[-_\s]?map\s+CC)\s*[:=]?\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Map CC"
+
+
+phenix.process_predicted_model:
+  description: "Process AlphaFold model for molecular replacement"
+  category: model_building
+  experiment_types: [xray]
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb]
+        flag: ""
+
+  # Input priorities - ONLY use raw predicted models, not processed ones
+  input_priorities:
+    model:
+      categories: [predicted, pdb]
+      exclude_categories: [processed_predicted, refined, phaser_output, rsr_output]
+
+  outputs:
+    files:
+      - pattern: "*processed*.pdb"
+        type: model
+
+  command: "phenix.process_predicted_model {model}"
+
+
+# -----------------------------------------------------------------------------
+# REFINEMENT PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.refine:
+  description: "Refine atomic model against X-ray diffraction data"
+  category: refinement
+  experiment_types: [xray]
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: ""
+        description: "Reflection data with Fobs and R-free flags"
+
+  # Input priorities: which file categories to prefer for each input
+  # Categories are checked in order; first match wins
+  # 
+  # IMPORTANT: Refinement requires POSITIONED models (category: model)
+  # It CANNOT use search_model (unpositioned templates like predictions)
+  input_priorities:
+    model:
+      # Use semantic parent category - refinement needs POSITIONED models only
+      categories: [model]
+      # Subcategory preference within 'model': with_ligand > refined > phaser_output > autobuild > docked
+      prefer_subcategories: [with_ligand, refined, phaser_output, autobuild_output, docked]
+      # Explicitly exclude search_model and intermediates - they are NOT positioned
+      exclude_categories: [search_model, predicted, processed_predicted, intermediate_mr, ligand_pdb, ligand]
+    data_mtz:
+      categories: [original_data_mtz, data_mtz]  # Prefer MTZ with R-free flags
+      exclude_categories: [map_coeffs_mtz]  # Never refine against map coefficients!
+
+  outputs:
+    files:
+      - pattern: "*_refine_*.pdb"
+        type: model
+      # New naming: refine_001_001.pdb, refine_002_001.pdb, etc.
+      - pattern: "refine_[0-9][0-9][0-9]_*.pdb"
+        type: model
+      # Data MTZ outputs (copy of input with R-free preserved)
+      - pattern: "*_data.mtz"
+        type: data_mtz
+        description: "Input data preserved with R-free flags"
+      - pattern: "refine_*_data.mtz"
+        type: data_mtz
+      # Map coefficients outputs (2mFo-DFc, Fo-Fc)
+      - pattern: "refine_*_001.mtz"
+        type: map_coeffs_mtz
+        description: "Map coefficients (2mFo-DFc, Fo-Fc)"
+      - pattern: "*_refine_*.mtz"
+        type: map_coeffs_mtz
+    metrics:
+      - r_free
+      - r_work
+      - bonds_rmsd
+      - angles_rmsd
+
+  command: "phenix.refine {model} {data_mtz} xray_data.r_free_flags.generate=True"
+
+  strategy_flags:
+    output_prefix:
+      flag: "output.prefix={value}"
+      type: string
+      hint: "Use short prefix to avoid long filenames (e.g., refine_001)"
+    cycles:
+      flag: "main.number_of_macro_cycles={value}"
+      type: int
+      hint: "Number of refinement macro-cycles (default is 3)"
+    macro_cycles:
+      flag: "main.number_of_macro_cycles={value}"
+      type: int
+      hint: "Alias for cycles - number of refinement macro-cycles"
+    simulated_annealing:
+      flag: "main.simulated_annealing={value}"
+      type: boolean
+      hint: "Use if R-free > 0.40 and not improving"
+    ordered_solvent:
+      flag: "ordered_solvent={value}"
+      type: boolean
+      hint: "Add waters after 2+ cycles AND R-free < 0.35 AND resolution <= 3.0Å"
+    twin_law:
+      flag: "refinement.twinning.twin_law={value}"
+      type: string
+      hint: "Include if twinning detected (e.g., '-h,-k,l')"
+    anisotropic_adp:
+      flag: 'refine.adp.individual.anisotropic="not (water or element H)"'
+      type: boolean
+      hint: "Only at very high resolution (<1.5Å)"
+    resolution:
+      flag: "xray_data.high_resolution={value}"
+      type: float
+    resolution_limit:
+      flag: "xray_data.high_resolution={value}"
+      type: float
+    nproc:
+      flag: "refinement.main.nproc={value}"
+      type: int
+
+  log_parsing:
+    r_free:
+      pattern: 'R-free\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "R-free"
+      summary_format: "{value:.4f}"
+    r_work:
+      pattern: 'R-work\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "R-work"
+      summary_format: "{value:.4f}"
+    bonds_rmsd:
+      pattern: '[Bb]onds?\s*(?:RMSD)?\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Bonds RMSD"
+      summary_format: "{value:.4f}"
+    angles_rmsd:
+      pattern: '[Aa]ngles?\s*(?:RMSD)?\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Angles RMSD"
+      summary_format: "{value:.3f}"
+
+  hints:
+    - "FIRST refinement after phaser: use generate_rfree_flags=True"
+    - "SUBSEQUENT refinements: do NOT generate new R-free flags"
+    - "Add waters only after 2+ cycles AND R-free < 0.35"
+    - "If TWINNING detected, include twin_law"
+
+  invariants:
+    - name: requires_unique_output_prefix
+      description: "Output prefix should be unique per cycle to avoid overwriting"
+      check:
+        has_strategy: output_prefix
+      fix:
+        auto_fill_output_prefix: "refine"
+      message: "Auto-generating unique output prefix"
+
+
+phenix.real_space_refine:
+  description: "Refine atomic model against cryo-EM map"
+  category: refinement
+  experiment_types: [cryoem]
+  requires_full_map: true  # Cannot use half-maps - refinement needs full reconstruction
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+      map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+        exclude_patterns: [half, _1, _2, _a, _b]
+
+  # Input priorities for cryo-EM refinement
+  # 
+  # IMPORTANT: Refinement requires POSITIONED models (category: model)
+  # It CANNOT use search_model (unpositioned templates like predictions)
+  # Templates must first be docked via phenix.dock_in_map
+  input_priorities:
+    model:
+      # Use semantic parent category - refinement needs POSITIONED models only
+      categories: [model]
+      # Subcategory preference within 'model': rsr_output > docked > with_ligand > autobuild
+      prefer_subcategories: [rsr_output, docked, with_ligand, autobuild_output]
+      # Explicitly exclude search_model and intermediates - they are NOT positioned
+      exclude_categories: [search_model, predicted, processed_predicted, intermediate_mr, ligand]
+    map:
+      categories: [full_map, optimized_full_map, map]
+      exclude_categories: [half_map]  # Half-maps too noisy for refinement
+
+  outputs:
+    files:
+      - pattern: "*_real_space_refined*.pdb"
+        type: model
+      # New naming: rsr_001_real_space_refined_000.pdb, etc.
+      - pattern: "rsr_[0-9][0-9][0-9]_*.pdb"
+        type: model
+    metrics:
+      - map_cc
+      - clashscore
+
+  command: "phenix.real_space_refine {model} {map}"
+
+  strategy_flags:
+    output_prefix:
+      flag: "output.prefix={value}"
+      type: string
+      hint: "Use short prefix to avoid long filenames (e.g., rsr_001)"
+    resolution:
+      flag: "resolution={value}"
+      type: float
+      required: true
+      hint: "REQUIRED - get from mtriage"
+    macro_cycles:
+      flag: "macro_cycles={value}"
+      type: int
+      hint: "More cycles for difficult cases"
+    nproc:
+      flag: "nproc={value}"
+      type: int
+
+  invariants:
+    - name: requires_resolution
+      description: "Resolution parameter is required for real_space_refine"
+      check:
+        has_strategy: resolution
+      fix:
+        auto_fill_resolution: true
+      message: "Resolution required for real_space_refine"
+
+    - name: requires_unique_output_prefix
+      description: "Output prefix should be unique per cycle to avoid overwriting"
+      check:
+        has_strategy: output_prefix
+      fix:
+        auto_fill_output_prefix: "rsr"
+      message: "Auto-generating unique output prefix"
+
+  log_parsing:
+    map_cc:
+      pattern: 'CC_mask\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Map CC"
+      summary_format: "{value:.3f}"
+    clashscore:
+      pattern: '[Cc]lashscore\s*[=:]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Clashscore"
+
+  hints:
+    - "Resolution is REQUIRED - get it from mtriage"
+    - "Requires a FULL map, not half-maps"
+
+
+# -----------------------------------------------------------------------------
+# LIGAND PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.ligandfit:
+  description: "Fit a ligand into difference density"
+  category: ligand
+  experiment_types: [xray, cryoem]
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb]
+        flag: "model="
+        exclude_patterns: [ligand, lig.pdb, ligand_fit]
+      map_coeffs_mtz:
+        extensions: [.mtz]
+        flag: "data="
+        description: "MTZ with map coefficients (2mFo-DFc phases) - NOT raw Fobs!"
+      ligand:
+        extensions: [.pdb, .cif]
+        flag: "ligand="
+        prefer_patterns: [lig, ligand]
+
+  # Input priorities: ligandfit REQUIRES map coefficients with calculated phases
+  # It CANNOT work with data_mtz (which only has Fobs, no phases)
+  input_priorities:
+    model:
+      categories: [model]
+      prefer_subcategories: [refined, with_ligand, phaser_output, predict_and_build_output]
+      exclude_categories: [search_model, predicted, ligand, ligand_pdb]
+    map_coeffs_mtz:
+      # Ligandfit needs map coefficients - explicitly require map_coeffs_mtz!
+      # PREFER denmod_map_coeffs (from autobuild maps_only) which has better maps
+      # ALSO check predict_build_map_coeffs (from predict_and_build) which has FP/PHIFP
+      # FALLBACK to refine_map_coeffs (from refine) which has 2FOFCWT/PH2FOFCWT
+      categories: [denmod_map_coeffs, predict_build_map_coeffs, refine_map_coeffs, map_coeffs_mtz]
+      exclude_categories: [data_mtz]  # Never use raw Fobs - ligandfit needs phases!
+
+  outputs:
+    files:
+      - pattern: "*ligand_fit*.pdb"
+        type: ligand
+
+  log_parsing:
+    ligand_cc:
+      pattern: '[Cc]orrelation\s+[Cc]oefficient\s*[:=]\s*([\d.]+)'
+      type: float
+      display_name: "Ligand CC"
+    ligand_rsr:
+      pattern: '[Rr]eal[-_\s]?[Ss]pace\s+R\s*[:=]\s*([\d.]+)'
+      type: float
+      display_name: "Ligand RSR"
+
+  command: "phenix.ligandfit {model} {map_coeffs_mtz} {ligand}"
+
+  defaults:
+    general.nproc: 4
+
+  # NOTE: Label specification removed in v104 - ligandfit auto-detects labels
+  # which is safer than trying to infer them from filename patterns.
+
+  strategy_flags:
+    nproc:
+      flag: "general.nproc={value}"
+      type: int
+
+  hints:
+    - "REQUIRES MTZ with map coefficients (calculated phases)"
+    - "Run phenix.refine first if you only have measured Fobs data"
+    - "Use output *_001.mtz from refine, NOT *_data.mtz"
+
+
+phenix.pdbtools:
+  description: "Combine PDB files (e.g., protein + ligand)"
+  category: utility
+  experiment_types: [xray, cryoem]
+
+  inputs:
+    required:
+      protein:
+        extensions: [.pdb]
+        flag: ""
+        exclude_patterns: [ligand_fit, lig.pdb, with_ligand]
+        priority_patterns: [refine]
+      ligand:
+        extensions: [.pdb]
+        flag: ""
+        prefer_patterns: [ligand_fit, lig]
+
+  # Input priorities for category-based file selection
+  input_priorities:
+    protein:
+      categories: [model]
+      prefer_subcategories: [refined, with_ligand]
+      exclude_categories: [ligand, search_model, ligand_fit_output]
+    ligand:
+      categories: [ligand_fit_output, ligand]
+      exclude_categories: [model, refined, search_model]
+
+  outputs:
+    files:
+      - pattern: "*with_ligand*.pdb"
+        type: model
+
+  command: "phenix.pdbtools {protein} {ligand}"
+  
+  # Set output filename to include 'with_ligand' for proper categorization
+  fixes:
+    output_name:
+      source: auto
+      format: "{protein_base}_with_ligand.pdb"
+
+  strategy_flags:
+    output_name:
+      flag: "output.file_name={value}"
+      type: string
+
+
+# -----------------------------------------------------------------------------
+# MAP OPTIMIZATION PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.resolve_cryo_em:
+  description: "Optimize cryo-EM map using density modification"
+  category: map_optimization
+  experiment_types: [cryoem]
+
+  inputs:
+    required:
+      half_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+        multiple: true
+    optional:
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "seq_file="
+      ncs_spec:
+        extensions: [.ncs_spec]
+        flag: "ncs_file="
+
+  outputs:
+    files:
+      - pattern: "*denmod_map*.ccp4"
+        type: map
+      - pattern: "*denmod_map*.mrc"
+        type: map
+      - pattern: "*density_modified*.ccp4"
+        type: map
+      - pattern: "*density_modified*.mrc"
+        type: map
+
+  command: "phenix.resolve_cryo_em {half_map} {sequence} {ncs_spec}"
+
+  hints:
+    - "Produces optimized full map from half-maps"
+    - "Try this first for map improvement"
+    - "Optional: provide ncs_spec file from map_symmetry for symmetric structures"
+
+
+phenix.map_sharpening:
+  description: "Sharpen cryo-EM map. Three modes: map+model, full map only, or two half maps"
+  category: map_optimization
+  experiment_types: [cryoem]
+
+  # Three modes of operation:
+  # Mode 1 (map+model): map.ccp4 model=model.pdb seq_file=seq.dat sharpening_method=shells model_sharpen=True
+  # Mode 2 (full map only): map.ccp4 resolution=2.9 sharpening_method=b-factor seq_file=seq.dat
+  # Mode 3 (two half maps): half_map=half_1.map half_map=half_2.map seq_file=seq.dat
+
+  inputs:
+    required: {}
+      # At least one of: full_map, or two half_maps
+    optional:
+      full_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+        description: "Full map (bare positional arg) - for modes 1 and 2"
+      half_map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: "half_map="
+        multiple: true
+        description: "Two half maps - for mode 3"
+      model:
+        extensions: [.pdb, .cif]
+        flag: "model="
+        description: "Model for model-based sharpening (mode 1)"
+      sequence:
+        extensions: [.fa, .fasta, .seq, .dat]
+        flag: "seq_file="
+
+  input_priorities:
+    full_map:
+      categories: [full_map, optimized_full_map, map]
+      exclude_categories: [half_map]
+    half_map:
+      categories: [half_map]
+
+  strategy_flags:
+    resolution:
+      flag: "resolution={value}"
+      type: float
+      description: "Resolution limit (REQUIRED for mode 2, full map without model)"
+    sharpening_method:
+      flag: "sharpening_method={value}"
+      type: str
+      description: "shells (with model), b-factor (full map only), or omit for half maps"
+    model_sharpen:
+      flag: "model_sharpen={value}"
+      type: bool
+      description: "Set True when using model-based sharpening (mode 1)"
+
+  outputs:
+    files:
+      - pattern: "*_sharpened*.ccp4"
+        type: map
+      - pattern: "*_sharpened*.mrc"
+        type: map
+      - pattern: "*sharpened*.ccp4"
+        type: map
+      - pattern: "*sharpened*.mrc"
+        type: map
+
+  command: "phenix.map_sharpening {full_map} {half_map} {model} {sequence}"
+
+  hints:
+    - "When model is available: sharpening_method=shells model_sharpen=True (NOT model_sharpening)"
+    - "When only full map: resolution= is REQUIRED, use sharpening_method=b-factor"
+    - "When half maps: use half_map= for each file, no resolution needed"
+    - "Model-based mode requires: single map, model, and resolution"
+    - "Half-map mode: provide two half-maps (no model needed)"
+
+
+# -----------------------------------------------------------------------------
+# MAP ANALYSIS PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.polder:
+  description: "Calculate Polder omit maps to evaluate ligand/residue placement in density"
+  category: map_analysis
+  experiment_types: [xray]
+  
+  # IMPORTANT: Polder requires R-free flags in the MTZ. If R-free flags were
+  # generated at a limited resolution (e.g., 3Å), polder MUST use the same
+  # resolution limit, otherwise it will crash with mismatched data sizes.
+  #
+  # NOTE: Polder only needs Fobs (data_mtz), NOT map coefficients!
+  # It calculates its own phases internally.
+
+  inputs:
+    required:
+      data_mtz:
+        extensions: [.mtz]
+        flag: ""
+        description: "MTZ file with Fobs data (R-free flags recommended) - NOT map coefficients"
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+        description: "Model file containing the atoms to evaluate"
+
+  strategy_flags:
+    selection:
+      flag: 'selection="{value}"'
+      type: str
+      description: "Atom selection for polder calculation (e.g., 'chain A and resseq 88')"
+    high_resolution:
+      flag: 'high_resolution={value}'
+      type: float
+      description: "High resolution limit in Angstroms (must match R-free flag resolution if limited)"
+
+  # Auto-fill resolution if R-free flags have a resolution limit
+  fixes:
+    auto_fill_rfree_resolution: true
+
+  outputs:
+    files:
+      - pattern: "*_polder_map_coeffs.mtz"
+        type: map_coeffs_mtz
+        description: "MTZ file with polder map coefficients"
+    metrics:
+      - cc_1_3
+      - polder_conclusion
+
+  command: "phenix.polder {data_mtz} {model} {selection}"
+
+  log_parsing:
+    cc_1_3:
+      pattern: 'CC\(1,3\):\s*([0-9.]+)'
+      type: float
+      display_name: "CC(calc_with_ligand, observed)"
+      summary_format: "{value:.4f}"
+    cc_1_2:
+      pattern: 'CC\(1,2\):\s*([0-9.]+)'
+      type: float
+      display_name: "CC(calc_with_ligand, calc_without)"
+      summary_format: "{value:.4f}"
+    cc_2_3:
+      pattern: 'CC\(2,3\):\s*([0-9.]+)'
+      type: float
+      display_name: "CC(calc_without_ligand, observed)"
+      summary_format: "{value:.4f}"
+    polder_conclusion:
+      pattern: 'The polder map is (likely to show the omitted atoms|inconclusive|unlikely to show)'
+      type: str
+      display_name: "Polder Conclusion"
+      summary_format: "{value}"
+
+  hints:
+    - "Use to verify ligand or residue placement in electron density"
+    - "High CC(1,3) and conclusion 'likely to show' indicates good placement"
+    - "Selection syntax: 'chain X and resseq N' or 'resname LIG'"
+    - "Requires MTZ with Fobs data (data_mtz), NOT map coefficients"
+    - "Polder calculates its own phases internally - it only needs measured Fobs"
+
+
+# -----------------------------------------------------------------------------
+# VALIDATION PROGRAMS
+# -----------------------------------------------------------------------------
+
+phenix.molprobity:
+  description: "Comprehensive model validation (geometry, clashes, Ramachandran)"
+  category: validation
+  experiment_types: [xray, cryoem]
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+        priority_patterns: [refine]
+
+  outputs:
+    metrics:
+      - clashscore
+      - ramachandran_favored
+      - ramachandran_outliers
+      - rotamer_outliers
+      - molprobity_score
+
+  command: "phenix.molprobity {model}"
+
+  log_parsing:
+    clashscore:
+      pattern: '[Cc]lashscore\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Clashscore"
+      summary_format: "{value:.2f}"
+    ramachandran_favored:
+      pattern: '[Rr]amachandran.*?favou?red\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Ramachandran Favored"
+      summary_format: "{value:.1f}%"
+    ramachandran_outliers:
+      pattern: '[Rr]amachandran.*?outliers?\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Ramachandran Outliers"
+      summary_format: "{value:.1f}%"
+    rotamer_outliers:
+      pattern: '[Rr]otamer.*?outliers?\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "Rotamer Outliers"
+      summary_format: "{value:.1f}%"
+    molprobity_score:
+      pattern: 'MolProbity score\s*[=:]\s*([0-9.]+)'
+      type: float
+      display_name: "MolProbity Score"
+      summary_format: "{value:.2f}"
+
+  hints:
+    - "Good values: clashscore <4, Ramachandran outliers <0.5%"
+    - "Run after refinement to check model quality"
+
+
+phenix.model_vs_data:
+  description: "Quick check of model-data agreement to verify model placement"
+  category: validation
+  experiment_types: [xray]
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+      data_mtz:
+        extensions: [.mtz, .sca, .hkl, .sdf]
+        flag: ""
+        description: "Reflection data with Fobs for R-factor calculation"
+
+  outputs:
+    metrics:
+      - r_work
+      - r_free
+
+  command: "phenix.model_vs_data {model} {data_mtz}"
+
+  log_parsing:
+    r_work:
+      pattern: '^\s*r_work:\s*([0-9.]+)'
+      type: float
+      display_name: "R-work"
+      summary_format: "{value:.4f}"
+    r_free:
+      pattern: '^\s*r_free:\s*([0-9.]+|None)'
+      type: str
+      display_name: "R-free"
+      summary_format: "{value}"
+
+  hints:
+    - "Quick way to check if model is already placed in unit cell"
+    - "R-work < 0.5 indicates model is positioned correctly"
+    - "Use before deciding whether to run Phaser"
+
+
+phenix.validation_cryoem:
+  description: "Validate model against cryo-EM map"
+  category: validation
+  experiment_types: [cryoem]
+  requires_full_map: true  # Validation metrics need full reconstruction
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+        priority_patterns: [refine]
+      map:
+        extensions: [.mrc, .ccp4, .map]
+        flag: ""
+
+  outputs:
+    metrics:
+      - map_cc
+
+  command: "phenix.validation_cryoem {model} {map}"
+
+  strategy_flags:
+    resolution:
+      flag: "resolution={value}"
+      type: float
+
+  log_parsing:
+    map_cc:
+      pattern: '(?:CC_mask|[Mm]ap[-_\s]?CC|[Mm]odel[-_\s]?vs[-_\s]?map\s+CC)\s*[:=]?\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Map CC"
+
+
+phenix.holton_geometry_validation:
+  description: "Detailed geometry validation with energy scoring"
+  category: validation
+  experiment_types: [xray, cryoem]
+
+  inputs:
+    required:
+      model:
+        extensions: [.pdb, .cif]
+        flag: ""
+        priority_patterns: [refine]
+
+  outputs:
+    metrics:
+      - geometry_energy
+
+  command: "phenix.holton_geometry_validation {model}"
+
+  log_parsing:
+    geometry_energy:
+      pattern: '(?:[Gg]eometry\s+)?[Ee]nergy\s*[:=]\s*([0-9.]+)'
+      type: float
+      extract: last
+      display_name: "Geometry energy"
+
+  hints:
+    - "Overall geometry energy should be close to ~67 for ideal model"

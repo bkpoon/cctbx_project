@@ -17,10 +17,14 @@ import mmtbx.maps.correlation
 
 master_params_str = """
 validate_ligands {
-
+resolution = None
+  .type = float
 nproc = 1
   .type = int
-
+model_fn_reduce2 = None
+  .type = path
+run_qmr = False
+  .type = bool
 }
 """
 
@@ -36,12 +40,14 @@ class manager(list):
   def __init__(self,
                model,
                fmodel,
+               map_manager,
                params,
                log=None):
     self.model = model
     self.params = params
     self.log   = log
     self.fmodel = fmodel
+    self.map_manager = map_manager
 
   # ----------------------------------------------------------------------------
 
@@ -58,8 +64,10 @@ class manager(list):
       lr = ligand_result(
         model       = self.model,
         fmodel      = self.fmodel,
+        map_manager = self.map_manager,
         ligand_isel = ligand_isel,
-        sel_str     = sel_str)
+        sel_str     = sel_str,
+        params      = self.params)
       ligand_results.append(lr)
       for attr, func in lr._result_attrs.items():
         funcs.append([lr, func])
@@ -165,16 +173,20 @@ class manager(list):
         if is_suspicious: check='***'
         else:             check =''
 
-        #line = [lr.id_str,check, ccs.cc_2fofc, clashes.n_clashes,
+        #line = [lr.id_str,check, ccs.rscc, clashes.n_clashes,
         #  round(adps.b_min,1), round(adps.b_max,1), round(adps.b_mean,1)]
         #print(table_str.format(*line), file=self.log)
 
         val_id      = f"{lr.id_str:^14}"
         val_check   = f"{check:^12}"
-        val_cc      = f"{ccs.cc_2fofc:^9.2f}" if ccs is not None else f"{'':^9}"
+        val_cc      = f"{ccs.rscc:^9.2f}" if ccs is not None else f"{'':^9}"
         val_mapvals = f"{round((map_vals.fofc_map_values<=-3).count(True)/n_atoms, 2):^12}" if map_vals is not None else f"{'':^12}"
-        val_clash   = f"{clashes.n_clashes:^9}" if clashes.n_clashes != 0 else f"{'-':^9}"
-        val_hbonds  = f"{clashes.n_hbonds:^9}" if clashes.n_hbonds != 0 else f"{'-':^9}"
+        if clashes is not None:
+          val_clash   = f"{clashes.n_clashes:^9}" if clashes.n_clashes != 0 else f"{'-':^9}"
+          val_hbonds  = f"{clashes.n_hbonds:^9}" if clashes.n_hbonds != 0 else f"{'-':^9}"
+        else:
+          val_clash   = f"{'NA':^9}"
+          val_hbonds  = f"{'NA':^9}"
         val_b_min   = f"{round(adps.b_min,1):^7}"
         val_b_max   = f"{round(adps.b_max,1):^7}"
         val_b_mean  = f"{round(adps.b_mean,1):^7}"
@@ -287,12 +299,16 @@ class ligand_result(object):
   def __init__(self,
                model,
                fmodel,
+               map_manager,
                ligand_isel,
-               sel_str):
+               sel_str,
+               params):
     self.model       = model
     self.fmodel      = fmodel
+    self.map_manager = map_manager
     self.ligand_isel = ligand_isel
     self.sel_str     = sel_str
+    self.params      = params
 
     # results
     self._result_attrs = {
@@ -304,6 +320,7 @@ class ligand_result(object):
       '_ccs'           : 'get_ccs',
       '_is_suspicious' : 'check_if_suspicious',
       '_map_values'    : 'get_map_values',
+      '_qmr'           : 'get_qmr',
       #'_polder_ccs'  : 'get_polder_ccs',
     }
 
@@ -346,15 +363,16 @@ class ligand_result(object):
       map_vals = self.get_map_values()
     # apply criteria for metrics
     if ccs is not None:
-      if ccs.cc_2fofc < 0.5:
+      if ccs.rscc < 0.5:
         self._is_suspicious = True
     if adps.b_mean_within is not None:
       if adps.b_mean > 4 * adps.b_mean_within:
         self._is_suspicious = True
     if occs.occ_mean == 0.:
       self._is_suspicious = True
-    if clashes.n_clashes > 0.5 * n_atoms:
-      self._is_suspicious = True
+    if clashes is not None:
+      if clashes.n_clashes > 0.5 * n_atoms:
+        self._is_suspicious = True
     if map_vals is not None:
       if (map_vals.fofc_map_values<-3).count(True) >= 0.5 * n_atoms:
         self._is_suspicious = True
@@ -386,6 +404,7 @@ class ligand_result(object):
     dihedral = stats.dihedral()
     #print('number dihedral outliers', len(dihedral.outliers))
     #print('dihedral rmsd',dihedral.mean)
+    dihedral_z = stats.dihedral(return_rmsZ=True)
 
     plane = stats.planarity()
     #print('plane rmsd', plane.mean)
@@ -401,12 +420,13 @@ class ligand_result(object):
       bond_n     = bond.n,
       bond_n_outliers = len(bond.outliers),
       angle_rmsd = angle.mean,
+      angle_rmsz = angle_z.mean,
       angle_n     = angle.n,
       angle_n_outliers = len(angle.outliers),
-      angle_rmsz = angle_z.mean,
       #chirality_rmsd = geo.chirality.mean,
       planarity_rmsd = plane.mean,
       dihedral_rmsd = dihedral.mean,
+      dihedral_rmsz = dihedral_z.mean,
       dihedral_n     = dihedral.n,
       dihedral_n_outliers = len(dihedral.outliers),)
     return self._rmsds
@@ -545,6 +565,67 @@ class ligand_result(object):
 
   # ----------------------------------------------------------------------------
 
+  def get_qmr(self):
+    if self._qmr is not None:
+      return self._qmr
+    if not self.params.run_qmr:
+      return
+
+    skip=True
+    for exclude in ['SO4', 'PO4', 'GOL']:
+      if self.sel_str.find(' %s '%exclude)>-1: break
+    else:
+      skip=False
+    if skip: return
+
+    from libtbx.utils import null_out
+    from mmtbx.geometry_restraints.quantum_interface import get_qm_restraints_scope
+    qi_phil_string = get_qm_restraints_scope()
+    replacements={' selection = None' : ' selection = "%s"' % self.sel_str,
+      'read_output_to_skip_opt_if_available = False' : 'read_output_to_skip_opt_if_available = True',
+      'capping_groups = False' : 'capping_groups = True',
+      ' starting_strain' : ' *starting_strain',
+      'ignore_x_h_distance_protein = False' : 'ignore_x_h_distance_protein = True',
+      ' pdb_final_buffer' : ' *pdb_final_buffer',
+      ' pdb_buffer' : ' *pdb_buffer',
+      }
+    for s1, s2 in replacements.items():
+      qi_phil_string=qi_phil_string.replace(s1, s2)
+
+    outl ='qi {'
+    for line in qi_phil_string.splitlines():
+      if line.strip().startswith('.'): continue
+      outl += '%s\n' % line
+    outl+='}\n'
+    qi_phil_string=outl
+
+    pf = 'qmr_validation_%s.phil' % (self.sel_str.replace(' ','_'))
+    f=open(pf, 'w')
+    f.write(qi_phil_string)
+    del f
+
+    from mmtbx.programs import quantum_interface
+    from iotbx.cli_parser import run_program
+
+    args = [self.params.model_fn_reduce2, pf, 'run_qmr=True']
+    results=run_program(program_class=quantum_interface.Program,
+                        args=args,
+                        logger=null_out())
+    print('results',results)
+
+    r = results[0][1]
+    rmsd = r.rmsds[0][0]
+    print('ligand rmsd of %s after QM minimization' % rmsd)
+    print(r.rmsds)
+
+    self._qmr = group_args(
+      rmsd = rmsd
+      )
+
+    return self._qmr
+
+  # ----------------------------------------------------------------------------
+
   def get_polder_ccs(self):
     if self._polder_ccs is not None:
       return self._polder_ccs
@@ -582,10 +663,71 @@ class ligand_result(object):
   # ----------------------------------------------------------------------------
 
   def get_ccs(self):
-    if self.fmodel is None:
+    if self.fmodel is None and self.map_manager is None:
       return
+
     if self._ccs is not None:
       return self._ccs
+
+    if self.fmodel is not None:
+      cc = self.get_ccs_miller()
+    if self.map_manager is not None:
+      cc = self.get_ccs_map()
+
+    if cc is None:
+      return None
+
+    self._ccs = group_args(
+      rscc = cc,
+       )
+    return self._ccs
+
+  # ----------------------------------------------------------------------------
+
+  def get_ccs_map(self):
+    sele = self.model.selection(string=self.sel_str)
+    cs = self.map_manager.crystal_symmetry()
+    # experimental map
+    m1 = self.map_manager.map_data()
+
+    crystal_gridding = maptbx.crystal_gridding(
+     unit_cell             = self.map_manager.unit_cell(),
+     space_group_info      = cs.space_group_info(),
+     pre_determined_n_real = m1.accessor().all())
+
+    # model map including ligand
+    f_calc = self._xrs.structure_factors(d_min=self.params.resolution).f_calc()
+    fft_map = miller.fft_map(
+      crystal_gridding     = crystal_gridding,
+      fourier_coefficients = f_calc)
+    del f_calc
+    fft_map.apply_sigma_scaling()
+    m2 = fft_map.real_map_unpadded()
+
+    maptbx.assert_same_gridding(m1, m2)
+
+    sites_cart = self.model.get_sites_cart().select(sele)
+    sel = maptbx.grid_indices_around_sites(
+      unit_cell  = cs.unit_cell(),
+      fft_n_real = m1.focus(),
+      fft_m_real = m1.all(),
+      sites_cart = sites_cart,
+      site_radii = flex.double(sites_cart.size(), 1.0))
+    #m1 = m1.set_selected(m1<0, 0)
+    #m2 = m2.set_selected(m1<0, 0)
+    cc = flex.linear_correlation(
+      x=m1.select(sel).as_1d(),
+      y=m2.select(sel).as_1d()).coefficient()
+
+    return cc
+
+  # ----------------------------------------------------------------------------
+
+  def get_ccs_miller(self):
+    #if self.fmodel is None:
+    #  return
+    #if self._ccs is not None:
+    #  return self._ccs
 
     cs = self.fmodel.f_obs().crystal_symmetry()
     crystal_gridding = maptbx.crystal_gridding(
@@ -630,10 +772,7 @@ class ligand_result(object):
       x=m1.select(sel).as_1d(),
       y=m2.select(sel).as_1d()).coefficient()
 
-    self._ccs = group_args(
-      cc_2fofc = cc,
-       )
-    return self._ccs
+    return cc
 
   # ----------------------------------------------------------------------------
 

@@ -506,7 +506,7 @@ class manager(object):
     if(self._xray_structure is not None):
       self._xray_structure.set_sites_cart(sites_cart_)
 
-  def set_b_iso(self, values, selection=None):
+  def set_b_iso(self, values, selection=None, keep_aniso=False):
     if(values is None): return
     if(selection is not None):
       b_iso = self.get_hierarchy().atoms().extract_b()
@@ -515,9 +515,10 @@ class manager(object):
       b_iso = values
     if(self._xray_structure is not None):
       self.get_xray_structure().set_b_iso(values = b_iso, selection=selection)
-      u_iso = self.get_xray_structure().scatterers().extract_u_iso()
-      b_iso = u_iso * adptbx.u_as_b(1)
-      b_iso = b_iso.set_selected(~self.get_xray_structure().use_u_iso(), -1)
+      if keep_aniso is False:
+       u_iso = self.get_xray_structure().scatterers().extract_u_iso()
+       b_iso = u_iso * adptbx.u_as_b(1)
+       b_iso = b_iso.set_selected(~self.get_xray_structure().use_u_iso(), -1)
     self.get_hierarchy().atoms().set_b(b_iso)
 
   def convert_to_isotropic(self, selection=None):
@@ -2350,12 +2351,14 @@ class manager(object):
     g = self.get_ncs_groups()
     return g is not None and len(g)>0
 
-  def search_for_ncs(self, params=None, show_groups=False, ncs_phil_groups=None):
+  def search_for_ncs(self, params=None, show_groups=False, ncs_phil_groups=None, log=None):
+    if log == None:
+      log = self.log
     self._ncs_obj = iotbx.ncs.input(
       hierarchy       = self.get_hierarchy(),
       ncs_phil_groups = ncs_phil_groups,
       params          = params,
-      log             = self.log)
+      log             = log)
     if(self._ncs_obj is not None):
       self._ncs_groups = self.get_ncs_obj().get_ncs_restraints_group_list()
     self._update_master_sel()
@@ -2898,7 +2901,7 @@ class manager(object):
       selection[j_seq] = False
     return selection
 
-  def reset_adp_for_hydrogens(self, scale=1.2):
+  def reset_adp_for_hydrogens(self, scale=1.2, keep_aniso=False):
     """
     Set the isotropic B-factor for all hydrogens to those of the associated
     heavy atoms (using the total isotropic equivalent) times a scale factor of
@@ -2913,7 +2916,7 @@ class manager(object):
       for t in self.xh_connectivity_table():
         i_x, i_h = t[0], t[1]
         bfi[i_h] = adptbx.u_as_b(bfi[i_x])*scale
-      self.set_b_iso(values = bfi, selection = hd_sel)
+      self.set_b_iso(values = bfi, selection = hd_sel, keep_aniso=keep_aniso)
 
   def reset_occupancy_for_hydrogens_simple(self):
     """
@@ -3700,7 +3703,7 @@ class manager(object):
     if(sizes.size()==0): return 0
     return sizes.count(1)*100./sizes.size()
 
-  def select(self, selection):
+  def select(self, selection, exclude_flags=False):
     # what about 3 types of NCS and self._master_sel?
     # XXX ignores IAS
     if isinstance(selection, flex.size_t) or isinstance(selection, flex.int):
@@ -3708,7 +3711,7 @@ class manager(object):
     new_pdb_hierarchy = self._pdb_hierarchy.select(selection, copy_atoms=True)
     sdi = self.scattering_dict_info
     new_refinement_flags = None
-    if(self.refinement_flags is not None):
+    if(self.refinement_flags is not None and not exclude_flags):
       new_refinement_flags = self.refinement_flags.select_detached(
         selection = selection)
     new_restraints_manager = None
@@ -4263,7 +4266,7 @@ class manager(object):
       if(self.riding_h_manager is not None or
          scattering_table in ["n_gaussian","wk1995", "it1992", "electron"]):
         not_hd_sel = ~hd_selection
-        m = m.select(not_hd_sel)
+        m = m.select(not_hd_sel, exclude_flags=True)
     return mmtbx.model.statistics.geometry(
       model           = m,
       fast_clash      = fast_clash,

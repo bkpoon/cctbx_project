@@ -3,16 +3,27 @@
 Runner script to inspect the contents of the persisted vector database.
 """
 from __future__ import division
-import langchain_tools as lct
 from collections import Counter
+import sys
+import os
 
-def run(db_dir = "./docs_db"):
+from libtbx.langchain.core.llm import get_llm_and_embeddings
+from libtbx.langchain.rag.retriever import load_persistent_db
+
+
+def run(db_dir="./docs_db", provider=None):
     """
     Loads the database and prints a summary of its contents.
     """
+    if provider is None:
+      provider = os.getenv("LLM_PROVIDER", "google")
+
     try:
-        embeddings = lct.get_embeddings()
-        vectorstore = lct.load_persistent_db(embeddings, db_dir)
+        # We ignore the LLM (_) as we only need embeddings here
+        print(f"Loading embeddings for provider: {provider}...")
+        _, embeddings = get_llm_and_embeddings(provider=provider)
+
+        vectorstore = load_persistent_db(embeddings, db_dir)
 
         # Directly access the collection to get metadata
         collection_data = vectorstore._collection.get(include=["metadatas"])
@@ -25,7 +36,13 @@ def run(db_dir = "./docs_db"):
         print(f"\nDatabase contains a total of {total_chunks} document chunks.")
 
         print("\n--- Source Files in Database ---")
-        source_paths = [metadata['source'] for metadata in collection_data['metadatas'] if 'source' in metadata]
+        # Handle cases where metadata might be None
+        metadatas = collection_data.get('metadatas', [])
+        if not metadatas:
+            print("No metadata found in collection.")
+            return
+
+        source_paths = [m.get('source', 'Unknown') for m in metadatas if m]
 
         if not source_paths:
             print("No source file information found in the database metadata.")
@@ -44,9 +61,16 @@ def run(db_dir = "./docs_db"):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
+
 if __name__ == "__main__":
-    import sys
+    # Usage: phenix.python run_inspect_db.py [db_dir] [provider]
+
+    db_dir = "/net/cci-gpu-01/raid1/scratch1/terwill/build_dir/modules/phenix/phenix/phenix_ai/docs_db_google"
+    provider = "google"
+
     if len(sys.argv) > 1:
-      run(db_dir=sys.argv[1])
-    else:
-      run()
+        db_dir = sys.argv[1]
+    if len(sys.argv) > 2:
+        provider = sys.argv[2]
+    print("ZZA",db_dir,provider)
+    run(db_dir=db_dir, provider=provider)

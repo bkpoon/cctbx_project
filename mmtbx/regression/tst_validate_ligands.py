@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 import time, os, traceback
 from libtbx.utils import null_out
+import mmtbx.model
+import iotbx.pdb
 import libtbx.load_env
 from libtbx.test_utils import approx_equal
 from iotbx.cli_parser import run_program
@@ -14,6 +16,7 @@ def run():
   run_test3()
   #run_test4()
   run_test5()
+  run_test6()
 
 # ------------------------------------------------------------------------------
 
@@ -202,7 +205,7 @@ def run_test3():
     clashes_result = lr.get_overlaps()
     #
     if (id_str.strip() == 'NAG A 600'):
-      assert approx_equal(ccs.cc_2fofc, 0.87, eps=0.03)
+      assert approx_equal(ccs.rscc, 0.87, eps=0.03)
       #
       assert approx_equal(occs.occ_min, 0, eps=0.01)
       assert approx_equal(occs.occ_max, 1, eps=0.01)
@@ -220,7 +223,7 @@ def run_test3():
       assert approx_equal(clashes_result.clashscore, 9.4, eps=0.5)
       #
     if (id_str.strip() == 'BTN A 400'):
-      assert approx_equal(ccs.cc_2fofc, 0.94, eps=0.03)
+      assert approx_equal(ccs.rscc, 0.94, eps=0.03)
       #
       assert approx_equal(occs.occ_mean, 1, eps=0.01)
       #
@@ -247,7 +250,7 @@ def run_test3():
       assert approx_equal(rmsd_result.planarity_rmsd, 0.02, eps=0.05)
       #
     if (id_str.strip() == 'BTN B 401'):
-      assert approx_equal(ccs.cc_2fofc, 0.95, eps=0.03)
+      assert approx_equal(ccs.rscc, 0.95, eps=0.03)
       #
       assert approx_equal(occs.occ_mean, 1, eps=0.01)
       #
@@ -362,6 +365,39 @@ def run_test5():
   os.remove(model_fn)
   os.remove('tst_5_newH.cif')
   os.remove('tst_5_newH.txt')
+
+# ------------------------------------------------------------------------------
+
+def run_test6():
+  pdb_str = '''
+CRYST1   14.103   13.596   12.544  90.00  90.00  90.00 P 1
+SCALE1      0.070907  0.000000  0.000000        0.00000
+SCALE2      0.000000  0.073551  0.000000        0.00000
+SCALE3      0.000000  0.000000  0.079719        0.00000
+ATOM      1  N   SER A   9       8.404   8.079   5.179  1.00 16.08           N
+ATOM      2  CA  SER A   9       7.167   7.545   5.742  1.00 17.80           C
+ATOM      3  C   SER A   9       6.169   8.596   6.220  1.00 19.90           C
+ATOM      4  O   SER A   9       5.000   8.269   6.456  1.00 19.71           O
+ATOM      5  CB  SER A   9       7.456   6.619   6.919  1.00 16.95           C
+ATOM      6  OG  SER A   9       8.035   5.415   6.447  1.00 17.71           O
+ATOM      7  H   SER A   9       9.103   7.949   5.663  1.00 16.08           H
+ATOM      8  HA  SER A   9       6.761   7.070   5.000  1.00 17.80           H
+ATOM      9  HB2 SER A   9       8.057   7.054   7.544  1.00 16.95           H
+ATOM     10  HB3 SER A   9       6.636   6.427   7.400  1.00 16.95           H
+ATOM     11  HG  SER A   9       8.382   5.000   7.090  1.00 17.71           H
+  '''
+  pdb_inp = iotbx.pdb.input(lines=pdb_str.split("\n"), source_info=None)
+  model = mmtbx.model.manager(
+    model_input = pdb_inp,
+    log         = null_out())
+  model.process(make_restraints=True)
+  stats = model.geometry_statistics(use_hydrogens=True)
+  dihedral = stats.dihedral()
+  dihedralz = stats.dihedral(return_rmsZ=True)
+  assert dihedral.n == 3
+  assert len(dihedral.outliers) == 0
+  assert approx_equal(dihedral.mean, 10.91, eps=0.05)
+  assert approx_equal(dihedralz.mean, 0.52, eps=0.05)
 
 # ------------------------------------------------------------------------------
 
