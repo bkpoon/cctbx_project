@@ -4,7 +4,7 @@
 #include <smtbx/ED/utils.h>
 #include <smtbx/ED/ed_data.h>
 #include <smtbx/ED/dyn_calculator.h>
-#include <smtbx/ED/n_beam.h>
+#include <smtbx/ED/N_beam.h>
 #include <smtbx/refinement/least_squares_fc.h>
 #include <cctbx/xray/fc_correction.h>
 #include <boost/scoped_ptr.hpp>

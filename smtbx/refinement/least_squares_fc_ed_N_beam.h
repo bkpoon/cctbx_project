@@ -2,7 +2,7 @@
 #include <scitbx/vec3.h>
 #include <scitbx/constants.h>
 #include <scitbx/lstbx/normal_equations.h>
-#include <smtbx/ED/n_beam.h>
+#include <smtbx/ED/N_beam.h>
 #include <smtbx/refinement/weighting_schemes.h>
 
 namespace smtbx {  namespace refinement  { namespace least_squares
