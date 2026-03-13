@@ -15,7 +15,7 @@ jobs:
 
       - name: Update GitLab mirror
         continue-on-error: true
-        if: github.repository == 'cctbx/cctbx_project' && github.ref == 'refs/heads/master'
+        if: github.repository == 'bkpoon/cctbx_project' && github.ref == 'refs/heads/ci'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.CCIBOT_KEY }}" > ~/.ssh/id_rsa
@@ -24,11 +24,14 @@ jobs:
           ssh-add ~/.ssh/id_rsa
           ssh-keyscan -t rsa gitlab.com >> ~/.ssh/known_hosts
           cd ./modules/cctbx_project
-          git checkout master
-          git pull origin master
+          git submodule sync --recursive
+          git checkout ci
+          git pull origin ci
           git remote add gitlab git@gitlab.com:cctbx/cctbx_project.git
           git fetch gitlab
-          git push -u gitlab master || true
+          git status
+          git --no-pager log -3
+          # git push -u gitlab master || true
 
       - uses: conda-incubator/setup-miniconda@v3
         with:
