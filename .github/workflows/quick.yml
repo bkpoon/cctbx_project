@@ -179,7 +179,6 @@ jobs:
             module=scitbx \
             module=crys3d \
             module=qttbx \
-            module=smtbx \
             module=spotfinder \
             module=xcif \
             max_retries=2 \
@@ -349,7 +348,6 @@ jobs:
             module=scitbx ^
             module=crys3d ^
             module=qttbx ^
-            module=smtbx ^
             module=spotfinder ^
             module=xcif ^
             max_retries=2 ^
