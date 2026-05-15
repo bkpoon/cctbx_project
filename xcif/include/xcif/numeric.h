@@ -7,6 +7,7 @@
 #define XCIF_NUMERIC_H
 
 #include <xcif/string_view.h>
+#include <cerrno>
 #include <utility>
 
 namespace xcif {
