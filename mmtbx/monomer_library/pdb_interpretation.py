@@ -2009,8 +2009,9 @@ def get_restraints_loading_flags(params):
 
 def special_dispensation(proxy_label, m_i, m_j, i_seqs):
   atoms=[]
-  for afs in [m_i.pdb_atoms, m_j.pdb_atoms]:
-    for atom in afs:
+  for m in [m_i, m_j]:
+    if (m is None): continue # proxies within one monomer are passed m_j=None
+    for atom in m.pdb_atoms:
       if atom.i_seq in i_seqs:
         atoms.append(atom)
   names=[]

@@ -2652,8 +2652,7 @@ END
     params = params.pdb_interpretation,
     log=None).xray_structure()
 
-def exercise_merging_of_multiple_torsions_from_ccp4(mon_lib_srv, ener_lib):
-  raw_records = '''\
+ccp4_multiple_torsions_pdb = '''\
 CRYST1  173.131   63.222  139.747  90.00 117.44  90.00 C 1 2 1
 SCALE1      0.005776  0.000000  0.002999        0.00000
 SCALE2      0.000000  0.015817  0.000000        0.00000
@@ -2678,8 +2677,9 @@ ATOM     67  O4  UFT D   7     -61.235  28.641   0.578  1.00104.59           O
 ATOM     68  C5  UFT D   7     -63.264  29.677   1.237  1.00 88.14           C
 ATOM     69  C6  UFT D   7     -64.492  29.451   1.732  1.00 89.94           C
 ATOM     70  F2' UFT D   7     -67.445  26.780   4.352  1.00 91.06           F
-  '''.splitlines()
-  cif_records = '''
+  '''
+
+ccp4_multiple_torsions_cif = '''
 data_comp_list
 loop_
 _chem_comp.id
@@ -2764,6 +2764,10 @@ UFT const_19        O2    C2    N3    C4     180.000 10.0   2
 UFT const_15        O4    C4    N3    C2     180.000 10.0   2
 
 '''
+
+def exercise_merging_of_multiple_torsions_from_ccp4(mon_lib_srv, ener_lib):
+  raw_records = ccp4_multiple_torsions_pdb.splitlines()
+  cif_records = ccp4_multiple_torsions_cif
   import iotbx.cif
   log = StringIO()
   cif_object = iotbx.cif.reader(input_string=cif_records).model()
@@ -2780,11 +2784,38 @@ UFT const_15        O4    C4    N3    C2     180.000 10.0   2
     params = params.pdb_interpretation,
     log=None).xray_structure()
 
+def exercise_conflicting_dihedral_within_one_residue(mon_lib_srv, ener_lib):
+  # UFX defines both the C2'-endo and the C3'-endo sugar pucker, giving two
+  # different ideal angles for the same four ring atoms.  Without the CCP4 tor
+  # merging above both reach the dihedral registry and conflict.  They come from
+  # the monomer itself, so m_j is None down in special_dispensation(); the
+  # conflict still has to be reported as a Sorry.
+  raw_records = ccp4_multiple_torsions_pdb.replace("UFT", "UFX").splitlines()
+  cif_records = ccp4_multiple_torsions_cif.replace("UFT", "UFX")
+  import iotbx.cif
+  cif_object = iotbx.cif.reader(input_string=cif_records).model()
+  mon_lib_srv.process_cif_object(cif_object=cif_object)
+  local_params = iotbx.phil.parse(
+    monomer_library.pdb_interpretation.grand_master_phil_str,
+    process_includes=True).extract()
+  try:
+    monomer_library.pdb_interpretation.process(
+      mon_lib_srv=mon_lib_srv,
+      ener_lib=ener_lib,
+      file_name=None,
+      raw_records=raw_records,
+      params=local_params.pdb_interpretation,
+      log=None)
+  except Sorry as e:
+    assert str(e).startswith("Conflicting dihedral restraints:"), str(e)
+  else: raise Exception_expected
+
 def run(args):
   assert len(args) == 0
   mon_lib_srv = monomer_library.server.server()
   ener_lib = monomer_library.server.ener_lib()
   exercise_merging_of_multiple_torsions_from_ccp4(mon_lib_srv, ener_lib)
+  exercise_conflicting_dihedral_within_one_residue(mon_lib_srv, ener_lib)
   exercise_allow_polymer_cross_special_position(mon_lib_srv, ener_lib)
   exercise_bad_custom_bonds(mon_lib_srv, ener_lib)
   exercise_bad_water(mon_lib_srv, ener_lib)
