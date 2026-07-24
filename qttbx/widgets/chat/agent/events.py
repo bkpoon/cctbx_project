@@ -78,10 +78,17 @@ class ImageEmitted(AgentEvent):
 
 @dataclass
 class TokenUsage(AgentEvent):
+  """Token accounting for one assistant turn.
+
+  Field meanings -- in particular that ``context_tokens`` is a peak, not a
+  total, and must never be summed -- are documented on the stored
+  ``conversation.TokenUsage``, which is the canonical definition.
+  """
   input: int = 0
   output: int = 0
   cache_read: int = 0
   cache_creation: int = 0
+  context_tokens: int = 0
 
   def to_stored(self):
     """Convert this usage event to the canonical stored ``TokenUsage``.

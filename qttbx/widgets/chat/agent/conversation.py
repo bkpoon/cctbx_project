@@ -40,6 +40,23 @@ def _new_id():
   return uuid.uuid4().hex
 
 
+# A truthy ``data`` entry under this key marks a content block as EPHEMERAL:
+# it is sent to the model as part of the live conversation, but is never
+# written to disk (``storage.save`` drops it via ``is_ephemeral_block``). Used
+# for transient injections that must reach the model exactly for the turn they
+# ride on and neither persist nor replay -- e.g. the context-pressure handoff
+# note. Filtering at the serialization choke point (rather than at one caller's
+# turn-end) is what makes "never on disk" hold across every save path: mid-turn
+# autosave, turn-end, errored-turn, and close saves alike.
+EPHEMERAL_BLOCK_KEY = "ephemeral"
+
+
+def is_ephemeral_block(b):
+  """True when content block ``b`` is tagged ephemeral (see
+  ``EPHEMERAL_BLOCK_KEY``) and so must not be persisted."""
+  return bool(getattr(b, "data", None)) and bool(b.data.get(EPHEMERAL_BLOCK_KEY))
+
+
 @dataclass
 class ContentBlock:
   """One element of a ``Message.content`` list.
@@ -69,10 +86,27 @@ class ContentBlock:
 
 @dataclass
 class TokenUsage:
+  """Per-message token accounting.
+
+  The first four are COST fields: they accumulate over everything the message
+  cost to produce, and summing them across messages gives a conversation's
+  total. Backends that run their own tool loop report them summed over every
+  API call in the turn.
+
+  ``context_tokens`` is NOT one of them and must never be summed. It is the
+  peak PROMPT size (input + cache_read + cache_creation) of a single API call
+  in that turn -- i.e. how full the context window was, which the cost fields
+  cannot answer because they aggregate many calls (real sessions record cost
+  sums of 3M-114M against a 1M window). To read a conversation's context
+  usage, take the MAXIMUM of this field across messages, not the total.
+  0 means "not measured" -- an older saved conversation, or a backend that
+  does not report per-call usage -- never "context empty".
+  """
   input: int = 0
   output: int = 0
   cache_read: int = 0
   cache_creation: int = 0
+  context_tokens: int = 0
 
 
 @dataclass

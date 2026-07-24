@@ -479,7 +479,8 @@ def exercise_token_usage_event_carries_all_fields_to_message():
   usage field added later is covered automatically."""
   session, tmp = _new_test_session([
     [TextDelta(text="hi"),
-     TokenUsageEvent(input=11, output=22, cache_read=33, cache_creation=44),
+     TokenUsageEvent(input=11, output=22, cache_read=33, cache_creation=44,
+                     context_tokens=55),
      TurnDone(stop_reason="end_turn")],
   ])
   try:
@@ -489,7 +490,8 @@ def exercise_token_usage_event_carries_all_fields_to_message():
     assistant = session.run_turn(user_msg, cancel)
     assert isinstance(assistant.usage, TokenUsage), type(assistant.usage)
     assert assistant.usage == TokenUsage(
-      input=11, output=22, cache_read=33, cache_creation=44), assistant.usage
+      input=11, output=22, cache_read=33, cache_creation=44,
+      context_tokens=55), assistant.usage
   finally:
     shutil.rmtree(tmp)
 

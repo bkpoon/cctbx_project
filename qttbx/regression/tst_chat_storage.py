@@ -520,6 +520,69 @@ def exercise_all_token_usage_fields_round_trip():
     shutil.rmtree(tmp)
 
 
+def exercise_context_tokens_round_trips_and_is_not_a_cost_field():
+  """``context_tokens`` persists like the other usage fields.
+
+  It differs from them in meaning: the cost fields accumulate over a turn and
+  are meant to be summed, while this one is a PEAK prompt size and must never
+  be. Round-tripping it is what lets a restored conversation know how full its
+  context already is without re-measuring."""
+  tmp, storage = _new_storage()
+  try:
+    conv = Conversation.new(profile_name="p", model="m", title="ctx")
+    usage = TokenUsage(input=11, output=22, cache_read=33, cache_creation=44,
+                       context_tokens=788694)
+    conv.append(Message(role="assistant",
+                        content=[ContentBlock(type="text",
+                                              data={"text": "hi"})],
+                        timestamp=now(), stop_reason="end_turn", usage=usage))
+    storage.save(conv)
+    loaded = storage.load(conv.meta.id)
+    assert loaded.messages[-1].usage.context_tokens == 788694, \
+      loaded.messages[-1].usage
+    assert loaded.messages[-1].usage == usage, loaded.messages[-1].usage
+  finally:
+    shutil.rmtree(tmp)
+
+
+def exercise_usage_written_before_context_tokens_existed_loads_as_zero():
+  """Conversations saved by an older build have no ``context_tokens`` key.
+  They must load with 0 -- read as "not measured", never as "context empty"."""
+  from qttbx.widgets.chat.agent.storage import _token_usage_from_dict
+  legacy = {"input": 1, "output": 2, "cache_read": 3, "cache_creation": 4}
+  usage = _token_usage_from_dict(legacy)
+  assert usage.context_tokens == 0, usage
+  assert usage.input == 1, usage
+
+
+def exercise_ephemeral_blocks_are_never_persisted():
+  """A content block tagged ephemeral is dropped on save, on EVERY path.
+
+  ``save`` is the single choke point every writer funnels through -- the
+  worker's mid-turn autosave, the turn-end / errored-turn / close saves alike
+  (see ``persistable_prefix``). Filtering here, rather than at one caller's
+  turn-end, is what makes a transient block (a context-pressure note sent to
+  the model for one turn) provably absent from disk no matter which path saved.
+  The block's non-ephemeral siblings in the same message must survive."""
+  from qttbx.widgets.chat.agent.conversation import EPHEMERAL_BLOCK_KEY
+  tmp, storage = _new_storage()
+  try:
+    conv = Conversation.new(profile_name="p", model="m", title="eph")
+    conv.append(Message(role="user", timestamp=now(), content=[
+      ContentBlock(type="text", data={"text": "real question"}),
+      ContentBlock(type="text", data={"text": "[transient note]",
+                                      EPHEMERAL_BLOCK_KEY: True})]))
+    storage.save(conv)
+    loaded = storage.load(conv.meta.id)
+    texts = [b.data.get("text") for b in loaded.messages[-1].content]
+    assert texts == ["real question"], texts
+    # The in-memory conversation is untouched -- the block is still there for
+    # the turn that is delivering it; only the serialized form drops it.
+    assert len(conv.messages[-1].content) == 2, conv.messages[-1].content
+  finally:
+    shutil.rmtree(tmp)
+
+
 def exercise_read_json_retries_windows_sharing_violation():
   """On Windows a reader's ``open`` can fail with ``PermissionError``
   (ERROR_ACCESS_DENIED) during the brief window a concurrent saver holds the file
@@ -1263,6 +1326,9 @@ def exercise():
   exercise_store_attachment_cleans_up_tmp_on_replace_failure()
   exercise_atomic_replace_fails_fast_on_posix()
   exercise_all_token_usage_fields_round_trip()
+  exercise_ephemeral_blocks_are_never_persisted()
+  exercise_context_tokens_round_trips_and_is_not_a_cost_field()
+  exercise_usage_written_before_context_tokens_existed_loads_as_zero()
   exercise_read_json_retries_windows_sharing_violation()
   exercise_concurrent_saves_do_not_corrupt()
   exercise_save_reindex_false_skips_index()
