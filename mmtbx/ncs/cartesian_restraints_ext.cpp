@@ -54,7 +54,7 @@ namespace {
           arg("gradients")))
         .def_pickle(pair_registry_wrappers())
       ;
-      register_ptr_to_python<std::auto_ptr<pair_registry> >();
+      register_ptr_to_python<std::shared_ptr<pair_registry> >();
     }
   };
 

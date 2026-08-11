@@ -6,6 +6,10 @@
 #include <locale.h>
 #include <stdexcept>
 
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#include <xlocale.h>
+#endif
+
 // strtod is locale-sensitive (decimal separator varies).  Use a C-locale
 // strtod wrapper so that CIF's mandatory '.' separator always works.
 // POSIX provides strtod_l / newlocale; MSVC provides _strtod_l / _create_locale.
