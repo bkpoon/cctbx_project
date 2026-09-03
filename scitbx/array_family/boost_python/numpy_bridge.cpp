@@ -2,7 +2,7 @@
 #include <boost/python/numpy.hpp>
 #include <boost/python.hpp>
 #include <boost/python/converter/registry.hpp>
-#include <limits>
+#include <complex>
 #include <scitbx/array_family/versa.h>
 #include <scitbx/array_family/accessors/flex_grid.h>
 #include <boost_adaptbx/type_id_eq.h>
@@ -10,7 +10,7 @@
 
 #if defined(SCITBX_HAVE_NUMPY_INCLUDE)
 // https://docs.scipy.org/doc/numpy/reference/c-api.array.html
-#define PY_ARRAY_UNIQUE_SYMOL FLEX_ARRAY_API
+#define PY_ARRAY_UNIQUE_SYMBOL FLEX_ARRAY_API
 // #define NO_IMPORT_ARRAY
 #include <numpy/arrayobject.h>
 #else
@@ -232,110 +232,172 @@ namespace scitbx { namespace af { namespace boost_python {
 
 #undef SCITBX_LOC
 
-// Workaround for https://github.com/boostorg/python/issues/511
-// NumPy 2.0 scalar types (e.g. np.float32, np.int32) no longer subclass
-// Python's built-in float/int, so Boost.Python's rvalue converters
-// (which use PyFloat_Check/PyLong_Check) fail to convert them.
-// Register custom converters that use PyNumber_Float/PyNumber_Long instead.
+// Cross-dtype conversions of NumPy scalars to C++ scalars.
+//
+// Boost.Python's numpy::initialize() only registers converters for exact
+// dtype matches (np.float64 -> double, np.int32 -> int, np.uint64 ->
+// std::size_t, ...). NumPy 2 makes mixed expressions such as
+// `arr[i] += np.float32(x)` produce np.float32 (NEP 50 promotion), for
+// which no converter exists, so the widening conversions are registered
+// here: any real scalar (np.floating, np.integer, np.bool_) -> float and
+// double, any np.integer -> every fundamental integer type, and any real
+// or complex scalar -> std::complex<double>. Registered with push_back,
+// they only take effect when Boost's exact-dtype converters have declined.
+// See https://github.com/boostorg/python/issues/511.
+//
+// The rule is that a NumPy scalar argument behaves exactly like the
+// equivalent Python scalar would, with two deliberate exceptions: np.bool_
+// does not convert to the integer types (see is_numpy_integer_scalar), and
+// NumPy integers do not convert to bool although Python ints do.
+// Consequences worth knowing:
+//
+// - `flex_int_array <op> np.int64(2)` resolves to the C++ int overload,
+//   exactly like a Python int operand: truncating division, C-style
+//   modulo, and wraparound on overflow (`flex.int8([2]) * np.int64(100)`
+//   is -56) instead of NumPy's promotion; an out-of-range scalar raises
+//   OverflowError.
+//
+// - Only `flex_array <op> numpy_scalar` is affected. In the reversed order,
+//   `numpy_scalar <op> flex_array`, NumPy's own operator runs first: the
+//   scalar's __mul__/__lt__ consumes the flex array through the sequence
+//   protocol and returns an ndarray before flex's __rmul__/__gt__ is ever
+//   consulted. Opting out of that (e.g. __array_ufunc__ = None on the flex
+//   classes) would change the result type of every existing mixed
+//   expression, so it is left as is.
 
 namespace {
 
-  // Converter for numpy scalar -> C++ floating point types
+#if defined(SCITBX_HAVE_NUMPY_INCLUDE)
+
+  // np.timedelta64 subclasses np.signedinteger but is a duration, not a
+  // number: it must fall through to NumPy. np.bool_ is deliberately not an
+  // integer here, although Python True/False is: a NumPy boolean mask
+  // handed to a method taking an index sequence (flex.double.select, for
+  // one) would otherwise be consumed as the index set {0, 1} instead of
+  // raising.
+  inline bool is_numpy_integer_scalar(PyObject* obj)
+  {
+    return PyArray_IsScalar(obj, Integer) && !PyArray_IsScalar(obj, Timedelta);
+  }
+
+  inline bool is_numpy_real_scalar(PyObject* obj)
+  {
+    return PyArray_IsScalar(obj, Bool)
+        || is_numpy_integer_scalar(obj)
+        || PyArray_IsScalar(obj, Floating);
+  }
+
+  template <typename CppType>
+  void* construct_storage(
+    boost::python::converter::rvalue_from_python_stage1_data* data)
+  {
+    return reinterpret_cast<
+      boost::python::converter::rvalue_from_python_storage<CppType>*>(
+        data)->storage.bytes;
+  }
+
   template <typename CppType>
   struct numpy_scalar_to_floating {
-    static void* convertible(PyObject* obj) {
-#if defined(SCITBX_HAVE_NUMPY_INCLUDE)
-      if (PyArray_IsScalar(obj, Number) && !PyArray_IsScalar(obj, ComplexFloating)) {
-        return obj;
-      }
-#endif
-      return nullptr;
+    static void* convertible(PyObject* obj)
+    {
+      return is_numpy_real_scalar(obj) ? obj : nullptr;
     }
 
     static void construct(
-        PyObject* obj,
-        boost::python::converter::rvalue_from_python_stage1_data* data)
+      PyObject* obj,
+      boost::python::converter::rvalue_from_python_stage1_data* data)
     {
-      void* storage = reinterpret_cast<
-        boost::python::converter::rvalue_from_python_storage<CppType>*>(
-          data)->storage.bytes;
-      PyObject* as_float = PyNumber_Float(obj);
-      if (!as_float) boost::python::throw_error_already_set();
-      CppType value = static_cast<CppType>(PyFloat_AsDouble(as_float));
-      if (value == static_cast<CppType>(-1.0) && PyErr_Occurred()) {
-        Py_DECREF(as_float);
+      // invokes the scalar's __float__
+      double value = PyFloat_AsDouble(obj);
+      if (value == -1.0 && PyErr_Occurred()) {
         boost::python::throw_error_already_set();
       }
-      Py_DECREF(as_float);
+      void* storage = construct_storage<CppType>(data);
+      new (storage) CppType(static_cast<CppType>(value));
+      data->convertible = storage;
+    }
+  };
+
+  template <typename CppType>
+  struct numpy_scalar_to_integer {
+    static void* convertible(PyObject* obj)
+    {
+      return is_numpy_integer_scalar(obj) ? obj : nullptr;
+    }
+
+    // Convert to an exact Python int first and let Boost.Python's own int
+    // converter do the range check, so a NumPy integer gets exactly the
+    // treatment (and error message) of a Python int. extract() on the
+    // exact int never comes back here: this converter only accepts NumPy
+    // scalars.
+    static void construct(
+      PyObject* obj,
+      boost::python::converter::rvalue_from_python_stage1_data* data)
+    {
+      boost::python::handle<> as_long(PyNumber_Long(obj));
+      CppType value = boost::python::extract<CppType>(as_long.get())();
+      void* storage = construct_storage<CppType>(data);
       new (storage) CppType(value);
       data->convertible = storage;
     }
   };
 
-  // Converter for numpy scalar -> C++ integer types
   template <typename CppType>
-  struct numpy_scalar_to_integer {
-    static void* convertible(PyObject* obj) {
-#if defined(SCITBX_HAVE_NUMPY_INCLUDE)
-      if (PyArray_IsScalar(obj, Integer)) {
-        return obj;
-      }
-#endif
-      return nullptr;
+  struct numpy_scalar_to_complex {
+    static void* convertible(PyObject* obj)
+    {
+      return (is_numpy_real_scalar(obj)
+              || PyArray_IsScalar(obj, ComplexFloating)) ? obj : nullptr;
     }
 
     static void construct(
-        PyObject* obj,
-        boost::python::converter::rvalue_from_python_stage1_data* data)
+      PyObject* obj,
+      boost::python::converter::rvalue_from_python_stage1_data* data)
     {
-      void* storage = reinterpret_cast<
-        boost::python::converter::rvalue_from_python_storage<CppType>*>(
-          data)->storage.bytes;
-      PyObject* as_long = PyNumber_Long(obj);
-      if (!as_long) boost::python::throw_error_already_set();
-      long long wide_value = PyLong_AsLongLong(as_long);
-      if (wide_value == -1 && PyErr_Occurred()) {
-        Py_DECREF(as_long);
+      // invokes __complex__, falling back to __float__
+      Py_complex value = PyComplex_AsCComplex(obj);
+      if (value.real == -1.0 && PyErr_Occurred()) {
         boost::python::throw_error_already_set();
       }
-      Py_DECREF(as_long);
-      if (wide_value < static_cast<long long>(std::numeric_limits<CppType>::min()) ||
-          wide_value > static_cast<long long>(std::numeric_limits<CppType>::max())) {
-        PyErr_SetString(PyExc_OverflowError,
-          "NumPy scalar value out of range for target C++ integer type");
-        boost::python::throw_error_already_set();
-      }
-      new (storage) CppType(static_cast<CppType>(wide_value));
+      void* storage = construct_storage<CppType>(data);
+      new (storage) CppType(value.real, value.imag);
       data->convertible = storage;
     }
   };
+
+  template <template <typename> class Converter, typename CppType>
+  void register_converter()
+  {
+    boost::python::converter::registry::push_back(
+      &Converter<CppType>::convertible,
+      &Converter<CppType>::construct,
+      boost::python::type_id<CppType>());
+  }
+
+#endif // SCITBX_HAVE_NUMPY_INCLUDE
 
 } // anonymous namespace
 
   void register_numpy_scalar_converters()
   {
 #if defined(SCITBX_HAVE_NUMPY_INCLUDE)
-    using namespace boost::python;
+    register_converter<numpy_scalar_to_floating, float>();
+    register_converter<numpy_scalar_to_floating, double>();
 
-    // Floating point converters
-    converter::registry::push_back(
-      &numpy_scalar_to_floating<double>::convertible,
-      &numpy_scalar_to_floating<double>::construct,
-      type_id<double>());
-    converter::registry::push_back(
-      &numpy_scalar_to_floating<float>::convertible,
-      &numpy_scalar_to_floating<float>::construct,
-      type_id<float>());
+    // The fundamental types rather than the fixed-width typedefs: this
+    // covers int8_t ... uint64_t and std::size_t on every platform.
+    register_converter<numpy_scalar_to_integer, signed char>();
+    register_converter<numpy_scalar_to_integer, short>();
+    register_converter<numpy_scalar_to_integer, int>();
+    register_converter<numpy_scalar_to_integer, long>();
+    register_converter<numpy_scalar_to_integer, long long>();
+    register_converter<numpy_scalar_to_integer, unsigned char>();
+    register_converter<numpy_scalar_to_integer, unsigned short>();
+    register_converter<numpy_scalar_to_integer, unsigned int>();
+    register_converter<numpy_scalar_to_integer, unsigned long>();
+    register_converter<numpy_scalar_to_integer, unsigned long long>();
 
-    // Integer converters
-    converter::registry::push_back(
-      &numpy_scalar_to_integer<int>::convertible,
-      &numpy_scalar_to_integer<int>::construct,
-      type_id<int>());
-    converter::registry::push_back(
-      &numpy_scalar_to_integer<long>::convertible,
-      &numpy_scalar_to_integer<long>::construct,
-      type_id<long>());
+    register_converter<numpy_scalar_to_complex, std::complex<double> >();
 #endif
   }
 
