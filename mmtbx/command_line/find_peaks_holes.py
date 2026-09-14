@@ -382,10 +382,14 @@ def find_peaks_holes(
         fmodel=fmodel,
         pdb_hierarchy=pdb_hierarchy,
         log=out)
+    if (anom_map_coeffs is None):
+      anom_map_coeffs = fmodel.electron_density_map().map_coefficients(
+        map_type     = anom_map_type,
+        fill_missing = False,
+        isotropize   = False)
     anom_result = find_peaks.manager(
-      fmodel=fmodel,
-      map_type=anom_map_type,
-      map_coeffs=anom_map_coeffs,
+      map_coeffs = anom_map_coeffs,
+      xray_structure = fmodel.xray_structure,
       map_cutoff=anom_map_cutoff,
       params=params,
       log=out)
@@ -515,7 +519,7 @@ mmtbx.find_peaks_holes - difference map analysis
     map_cutoff=params.map_cutoff,
     anom_map_cutoff=params.anom_map_cutoff,
     filter_peaks_by_2fofc=params.filter_peaks_by_2fofc,
-    use_phaser_if_available=True,
+    use_phaser_if_available=params.use_phaser_if_available,
     return_llg_map=True,
     include_peaks_near_model=params.include_peaks_near_model,
     out=out)

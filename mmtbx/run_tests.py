@@ -286,6 +286,7 @@ general_tests = [
   "$D/regression/tst_validation_summary.py",
   "$D/regression/tst_maps_misc.py",
   "$D/regression/tst_anomalous_substructure.py",
+  "$D/regression/tst_find_peaks_holes_anomalous.py",
   #
   "$D/regression/tst_fmodel_no_cryst1.py",
   "$D/regression/tst_fmodel_and_dm.py",
