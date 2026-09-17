@@ -2956,9 +2956,9 @@ def LoopSendMessages():
 
 # WS server example
 import asyncio
-import websockets
+from websockets.asyncio.server import serve
 
-async def hello(websocket, path):
+async def hello(websocket):
   while True:
     name = await websocket.recv()
     print(f"< {name}")
@@ -2968,19 +2968,21 @@ async def hello(websocket, path):
       return
     await asyncio.sleep(0.2)
 
-start_server = websockets.serve(hello, "localhost", 8765)
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+async def main():
+  async with serve(hello, "localhost", 8765) as server:
+    await server.serve_forever()
+
+asyncio.run(main())
 
 
 
 # WS client example
 import asyncio
-import websockets
+from websockets.asyncio.client import connect
 
 async def hello():
   uri = "ws://localhost:8765"
-  async with websockets.connect(uri) as websocket:
+  async with connect(uri) as websocket:
     while True:
       name = input("What's your name?\n" )
       await websocket.send(name)
@@ -2988,6 +2990,6 @@ async def hello():
       greeting = await websocket.recv()
       print(f"< {greeting}")
 
-asyncio.get_event_loop().run_until_complete(hello())
+asyncio.run(hello())
 
 """

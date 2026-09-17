@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 from crys3d.hklviewer import jsview_3d
 from crys3d.regression import tests_HKLviewer
-import asyncio, os.path, websockets, socket, subprocess, time, threading
+import asyncio, os.path, socket, subprocess, time, threading
+from websockets.asyncio.server import serve
 
 
 global socket_connected
@@ -16,7 +17,7 @@ def find_free_port():
   return port
 
 
-async def handler(websocket, path):
+async def handler(websocket):
 # WS server example
   while True:
     name = await websocket.recv()
@@ -84,17 +85,14 @@ async def closing_time():
     t += dt
     global socket_connected
     if socket_connected:
-      asyncio.get_event_loop().call_soon(asyncio.get_event_loop().stop)
       return
   print('Timed out trying to connect to webbrowser. Waited for %s seconds' %maxtime)
-  asyncio.get_event_loop().call_soon(asyncio.get_event_loop().stop)
 
 
 async def startserver(port):
-  async with websockets.legacy.server.serve(handler, "localhost", port):
-    print("in startserver")
-    #await asyncio.Future()
-    #await asyncio.sleep(10)
+  # serve until the browser has said goodbye or we time out
+  async with serve(handler, "localhost", port):
+    await closing_time()
 
 if __name__ == '__main__':
   port = find_free_port()
@@ -102,13 +100,6 @@ if __name__ == '__main__':
   thrd.daemon = True
   thrd.start()
   print("Websockets server on localhost port %s waiting for browser connection." %port)
-  tasks = asyncio.gather(
-    #startserver(port),
-    websockets.legacy.server.serve(handler, "localhost", port),
-    closing_time()
-  )
-  evl = asyncio.get_event_loop()
-  evl.run_until_complete(tasks)
-  evl.run_forever()
+  asyncio.run(startserver(port))
   assert socket_connected
   print("OK")

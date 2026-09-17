@@ -1,44 +1,31 @@
 from __future__ import absolute_import, division, print_function
 import traceback
-from libtbx.utils import Sorry, to_str
+from libtbx.utils import to_str
 import threading, sys
-import os.path, time
+import time
 
 import struct
 import asyncio
-from websockets.legacy import server
-from typing import Optional
-from websockets.exceptions import (
-  ConnectionClosed,
-  ConnectionClosedError,
-  ConnectionClosedOK,
-)
+from websockets.asyncio import server
+from websockets.exceptions import ConnectionClosed
+from websockets.protocol import State
 
-class MyWebSocketServerProtocol(server.WebSocketServerProtocol):
+class MyWebSocketServerConnection(server.ServerConnection):
   def __init__(self, *args, **kwargs):
     self.client_connected = None
-    self.onconnect = None
-    self.ondisconnect = None
     self.onlostconnect = None
-    super().__init__(*args, max_size=100000000) # allow for saving 100Mb size images
-  def connection_open(self) -> None:
-    #print("In connection_open()")
+    super().__init__(*args, **kwargs)
+  def connection_made(self, transport) -> None:
+    #print("In connection_made()")
+    super().connection_made(transport)
     self.client_connected = self.local_address
-    if self.onconnect:
-      self.onconnect(self.client_connected)
-    super().connection_open()
-  def connection_lost(self, exc: Optional[Exception]) -> None:
+  def connection_lost(self, exc) -> None:
     #print("In connection_lost()")
     self.client_connected = None
-    if self.onlostconnect and hasattr(self, "close_code"):
-      self.onlostconnect(self.client_connected, self.close_code, self.close_reason)
+    # close_code and close_reason are only defined once the base class has closed the connection
     super().connection_lost(exc)
-  def connection_closed_exc(self) -> ConnectionClosed:
-    #print("In connection_closed_exc()")
-    self.client_connected = None
-    if self.ondisconnect:
-      self.ondisconnect(self.client_connected, self.close_code, self.close_reason)
-    return super().connection_closed_exc()
+    if self.onlostconnect:
+      self.onlostconnect(self.client_connected, self.close_code, self.close_reason)
 
 lock_timeout = 2
 
@@ -62,6 +49,7 @@ class WBmessenger(object):
       self.isterminating = False
       self.was_disconnected = None
       self.mywebsock = None
+      self.server = None
       self.websockeventloop = None
       self.clientmsgqueue_sem = threading.Semaphore()
       self.listening_sem = threading.Semaphore()
@@ -71,10 +59,19 @@ class WBmessenger(object):
       print( to_str(e) + "\n" + traceback.format_exc(limit=10))
 
 
+  async def start_server(self):
+    # websockets.asyncio.server.serve() must be called from within the running event loop
+    self.server = await server.serve(self.WebSockHandler, 'localhost',
+                                      self.websockport, #ssl=ssl_context,
+                                      create_connection=MyWebSocketServerConnection,
+                                      max_size=100000000, # allow for saving 100Mb size images
+                                      )
+
+
   def start_server_loop(self):
     #time.sleep(10)
     self.mprint("HKLviewerWebSockServerThread started", verbose=1)
-    self.websockeventloop.run_until_complete(self.server)
+    self.websockeventloop.run_until_complete(self.start_server())
     self.mprint("websocket server is listening", verbose=1)
     self.listening_sem.release()
     self.mprint("WBmessenger released listening_sem", verbose="threadingmsg")
@@ -97,10 +94,6 @@ class WBmessenger(object):
           logger.setLevel(logging.DEBUG)
           logger.addHandler(logging.StreamHandler())
 
-      self.server = server.serve(self.WebSockHandler, 'localhost',
-                                      self.websockport, #ssl=ssl_context,
-                                      create_protocol=MyWebSocketServerProtocol,
-                                      )
       self.mprint("Starting websocket server on port %s" %str(self.websockport), verbose=1)
       # run_forever() blocks execution so put in a separate thread
       self.wst = threading.Thread(target=self.start_server_loop, name="HKLviewerWebSockServerThread" )
@@ -110,8 +103,6 @@ class WBmessenger(object):
                                                      name="WebsocketClientMessageThread")
       self.websocketclientmsgthrd.daemon = True # ensure thread dies whenever program terminates through sys.exit()
       self.websocketclientmsgthrd.start()
-      if not self.server:
-        raise Sorry("Could not connect to web browser")
     except Exception as e:
       self.mprint( to_str(e) + "\n" + traceback.format_exc(limit=10), verbose=0)
 
@@ -123,19 +114,17 @@ class WBmessenger(object):
     self.websockeventloop.stop()
 
 
-  async def WebSockHandler(self, mywebsock, path):
+  async def WebSockHandler(self, mywebsock):
     # invoked only when a new websocket client (the browser) is waiting to connect
     self.mprint("Pending websocket client wanting to connect", verbose=1)
-    if hasattr(self.mywebsock, "state") and self.mywebsock.state == 2 \
-                                        and self.websockclient is not None:
+    if self.mywebsock is not None and self.mywebsock.state == State.CLOSING \
+                                  and self.websockclient is not None:
       await self.mywebsock.wait_closed()
     if self.websockclient is not None or self.ishandling:
       await asyncio.sleep(0.5)
       return
     self.ishandling = True
-    mywebsock.onconnect = self.OnConnectWebsocketClient
     self.OnConnectWebsocketClient(mywebsock.client_connected)
-    mywebsock.ondisconnect = self.OnDisconnectWebsocketClient
     mywebsock.onlostconnect = self.OnLostConnectWebsocketClient
     self.mywebsock = mywebsock
     getmsgtask = asyncio.ensure_future(self.ReceiveMsgQueue())
@@ -169,6 +158,7 @@ class WBmessenger(object):
       try: # use EAFP rather than LBYL style with websockets
         message = await self.mywebsock.recv()
       except Exception as e:
+        self.OnConnectionClosedException(e)
         if self.was_disconnected != 4242:
           self.mprint( to_str(e) + "\n" + traceback.format_exc(limit=10), verbose=1)
       self.clientmsgqueue_sem.acquire(blocking=True, timeout=lock_timeout)
@@ -257,6 +247,15 @@ class WBmessenger(object):
     self.ishandling = False
 
 
+  def OnConnectionClosedException(self, e):
+    # recv() and send() raise ConnectionClosed once the browser has disconnected
+    if isinstance(e, ConnectionClosed):
+      if e.rcvd is not None:
+        self.OnDisconnectWebsocketClient(None, e.rcvd.code, e.rcvd.reason)
+      else: # no close frame received from the browser
+        self.OnDisconnectWebsocketClient(None, 1006, "")
+
+
   def OnDisconnectWebsocketClient(self, client, close_code, close_reason):
     msg =  "Browser disconnected %s, code %s, reason: %s" %(str(self.websockclient), close_code, close_reason)
     self.mprint(msg , verbose=1 )
@@ -297,6 +296,7 @@ class WBmessenger(object):
           await self.mywebsock.send( bytearray(byteslst) )
         return True
       except Exception as e:
+        self.OnConnectionClosedException(e)
         if self.was_disconnected != 4242:
           self.mprint( str(e) + "\n" + traceback.format_exc(limit=10), verbose=1)
         self.websockclient = None
