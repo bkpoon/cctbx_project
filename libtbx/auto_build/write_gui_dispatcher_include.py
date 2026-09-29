@@ -6,6 +6,14 @@ import os.path
 import sys
 from optparse import OptionParser
 
+try:
+  from libtbx.dispatcher_env import environment_guard_lines, external_path_lines
+except ImportError:
+  # bootstrap runs this script before libtbx is importable
+  sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
+  from libtbx.dispatcher_env import environment_guard_lines, external_path_lines
+
 def run(args, prologue=None, epilogue=None, out=sys.stdout):
   parser = OptionParser(
     description="Generate the dispatcher include file for using "+
@@ -136,17 +144,14 @@ fi
 """ % (base_path, ":".join(ld_library_paths), ":".join(ld_library_paths), options.gtk_version), file=f)
   # restore some variables for conda
   if sys.platform != "win32" and options.use_conda:
-    print("""
-# include at start
-if [ "$LIBTBX_DISPATCHER_NAME" != "libtbx.scons" ] && \
-   [ -z "$PHENIX_TRUST_OTHER_ENV" ]; then
-  # work around broken library environments
-  LD_LIBRARY_PATH=""
-  DYLD_LIBRARY_PATH=""
-  DYLD_FALLBACK_LIBRARY_PATH=""
-  PYTHONPATH=""
-fi
-# include before command
+    print("", file=f)
+    print("# include at start", file=f)
+    # libtbx.scons builds against the caller's compiler environment
+    print('if [ "$LIBTBX_DISPATCHER_NAME" != "libtbx.scons" ]; then', file=f)
+    for line in environment_guard_lines("sh"):
+      print(line, file=f)
+    print("fi", file=f)
+    print("""# include before command
 if [ "$PHENIX_GUI_ENVIRONMENT" = "1" ]; then
   if [ -z "$DISABLE_PHENIX_GUI" ]; then
     export BOOST_ADAPTBX_FPE_DEFAULT=1
@@ -156,17 +161,9 @@ fi
 """, file=f)
   # QBio DivCon paths
   if sys.platform != "win32":
-    print("""
-if [ ! -z "$QB_PYTHONPATH" ]; then
-  export PYTHONPATH=$PYTHONPATH:$QB_PYTHONPATH
-fi
-if [ ! -z "$QB_LD_LIBRARY_PATH" ]; then
-  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$QB_LD_LIBRARY_PATH
-fi
-if [ ! -z "$QB_DYLD_LIBRARY_PATH" ]; then
-  export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$QB_DYLD_LIBRARY_PATH
-fi
-""", file=f)
+    print("", file=f)
+    for line in external_path_lines("sh"):
+      print(line, file=f)
   if (epilogue is not None):
     f.write(epilogue + "\n")
   if (options.epilogue is not None):

@@ -2,10 +2,10 @@
 (etc/conda/activate.d) without requiring "conda activate".
 
 The activation scripts set environment variables (e.g. GSETTINGS_SCHEMA_DIR,
-XML_CATALOG_FILES) that some packages need at runtime. The dispatcher sources
-them, setting CONDA_PREFIX only while they run and then restoring it, so only
-the variables the scripts export persist. Sourcing is skipped if this
-environment is already active.
+XML_CATALOG_FILES) that some packages need at runtime. The dispatcher points
+CONDA_PREFIX at this prefix, sources them, and leaves CONDA_PREFIX pointing
+here for the rest of the process. Sourcing is skipped if this environment is
+already active.
 
 Both the conda-package dispatchers (installed distributions) and the
 development-build dispatchers (write_bin_sh_dispatcher / write_win32_dispatcher)
@@ -38,7 +38,8 @@ def parse_output(text):
 
 def exercise_runtime():
   """Wrap the activation block in a minimal dispatcher fragment and run it,
-  checking the activation scripts are sourced and CONDA_PREFIX restored.
+  checking the activation scripts are sourced and CONDA_PREFIX left pointing
+  at this prefix.
 
   Both forms the codebase emits are exercised: the dispatcher form that
   resolves the prefix from LIBTBX_PREFIX at runtime (conda-package
@@ -114,11 +115,11 @@ def exercise_runtime():
       if not is_nt:
         os.chmod(script, 0o755)
 
-      # 1) Not active: the activation scripts run (CONDA_PREFIX is the prefix
-      #    while they run), then CONDA_PREFIX is restored to unset.
+      # 1) Not active: the activation scripts run and CONDA_PREFIX stays
+      #    pointed at this prefix for the process.
       out = run(conda_prefix_value=None)
       assert same_path(out["SENTINEL"], expected_marker), out
-      assert out["CONDA_PREFIX"] == "UNSET", out
+      assert same_path(out["CONDA_PREFIX"], conda_prefix), out
 
       # 2) Already active: the activation scripts are skipped and CONDA_PREFIX
       #    is left untouched.
@@ -126,11 +127,11 @@ def exercise_runtime():
       assert out["SENTINEL"] == "MISSING", out
       assert same_path(out["CONDA_PREFIX"], conda_prefix), out
 
-      # 3) A different environment is active: the activation scripts run, then
-      #    CONDA_PREFIX is restored to the original (different) value.
+      # 3) A different environment is active: the activation scripts run and
+      #    CONDA_PREFIX is switched to this prefix, not left on the other one.
       out = run(conda_prefix_value=other)
       assert same_path(out["SENTINEL"], expected_marker), out
-      assert same_path(out["CONDA_PREFIX"], other), out
+      assert same_path(out["CONDA_PREFIX"], conda_prefix), out
 
     # conda-package dispatcher form: prefix resolved from LIBTBX_PREFIX.
     check(env_config.conda_activation_lines(shell))
