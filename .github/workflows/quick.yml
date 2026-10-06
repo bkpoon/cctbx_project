@@ -47,6 +47,19 @@ jobs:
           cd ..
           rm bootstrap.py
 
+      - name: Download pyDiSCaMB
+        run: |
+          set -xe
+          cd ./modules
+          rm -fr pyDiSCaMB
+          git clone https://github.com/discamb-project/pyDiSCaMB.git
+          cd pyDiSCaMB
+          git checkout 1c036bbb1eb7da23f473b865552bd64fc6645f6b
+          sed -i 's/:/\//g' .gitmodules
+          sed -i 's/git@/https:\/\//g' .gitmodules
+          git submodule init
+          git submodule update
+
 # -----------------------------------------------------------------------------
   quick_unix_checks:
     needs: download_source
@@ -154,6 +167,18 @@ jobs:
           libtbx.scons -j 4
           libtbx.scons -j 4
 
+      - name: Install pyDiSCaMB
+        run: |
+          set -xe
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            source ${CONDA}/etc/profile.d/conda.sh
+            conda create -y -n compiler cxx-compiler
+            conda activate compiler
+          fi
+          source ./build/setpaths.sh
+          cd ./modules/pyDiSCaMB
+          libtbx.python -m pip install .
+
       - name: Run tests
         run: |
           set -xe
@@ -184,6 +209,22 @@ jobs:
             module=xcif \
             max_retries=2 \
             nproc=4
+
+      - name: Run pyDiSCaMB tests
+        run: |
+          set -xe
+          source ./build/setpaths.sh
+          cd ./modules/cctbx_project/mmtbx/regression/discamb
+          # currently failing on linux, also skipped in Azure Pipelines
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            rm -f tst_fmodel_fd_discamb_taam.py tst_fmodel_fd_discamb_taam_tyr.py
+          fi
+          for t in tst*.py; do
+            echo ${t}
+            echo "============================================================"
+            libtbx.python ${t}
+            echo
+          done
 
 # -----------------------------------------------------------------------------
   quick_win_checks:
@@ -319,6 +360,20 @@ jobs:
           call libtbx.scons -j 4
           if %errorlevel% neq 0 exit /b %errorlevel%
 
+      - name: Install pyDiSCaMB
+        shell: cmd
+        run: |
+          if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          )
+          if exist "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+            call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          )
+          call .\build\setpaths.bat
+          cd .\modules\pyDiSCaMB
+          call libtbx.python -m pip install .
+          if %errorlevel% neq 0 exit /b %errorlevel%
+
       - name: Run tests
         shell: cmd
         run: |
@@ -355,3 +410,16 @@ jobs:
             max_retries=2 ^
             nproc=4
           if %errorlevel% neq 0 exit /b %errorlevel%
+
+      - name: Run pyDiSCaMB tests
+        shell: cmd
+        run: |
+          call .\build\setpaths.bat
+          cd .\modules\cctbx_project\mmtbx\regression\discamb
+          for %%t in (tst*.py) do (
+            echo %%t
+            echo "============================================================"
+            call libtbx.python %%t
+            if errorlevel 1 exit /b 1
+            echo ""
+          )
