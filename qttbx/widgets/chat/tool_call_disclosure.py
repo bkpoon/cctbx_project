@@ -11,7 +11,7 @@ the other subclass.
 
 import json
 
-from qttbx.qt import QtCore, QtGui, QtWidgets
+from qttbx.qt import QtCore, QtWidgets
 
 from qttbx.widgets.chat.eliding import ElidingToolButton
 
@@ -43,28 +43,6 @@ _COLORS = {
 # ~880 px -- and the tool name it sits next to is not bounded at all. The
 # header not flooring the view is ElidingToolButton's job.
 _MAX_HEADER_STATUS = 60
-
-
-def set_transparent_background(view):
-  """Make a text view paint no background of its own, theme-switch safe.
-
-  The obvious recipe -- ``setStyleSheet("background: transparent;")`` --
-  has a Qt 5.15 trap: once a stylesheet-styled view has been polished,
-  it can keep the palette the stylesheet engine resolved for it, so an
-  OS light/dark switch afterwards leaves its text at the OLD theme's
-  colour. Setting the ``Base`` role transparent on the widget's own
-  palette pins only that role; ``Text`` keeps inheriting, so the view
-  follows the app palette like an unstyled widget.
-
-  Parameters
-  ----------
-  view : QtWidgets.QAbstractScrollArea
-      A QPlainTextEdit / QTextEdit style view.
-  """
-  palette = view.palette()
-  palette.setColor(QtGui.QPalette.Base, QtCore.Qt.transparent)
-  view.setPalette(palette)
-  view.viewport().setAutoFillBackground(False)
 
 
 class DisclosureRow(QtWidgets.QFrame):
@@ -230,31 +208,12 @@ class ToolCallDisclosure(DisclosureRow):
     # ConversationView is the sole scroller per the chat UI redesign.
     # No setMaximumHeight cap -- a 10K-line tool result produces a
     # 10K-line bubble that the outer view scrolls through.
-    from qttbx.widgets.chat.auto_height import set_auto_height
+    from qttbx.widgets.chat.auto_height import plain_text_view
 
-    self.args_view = QtWidgets.QPlainTextEdit(self.body)
-    self.args_view.setReadOnly(True)
-    self.args_view.setFrameStyle(QtWidgets.QFrame.NoFrame)
-    # Monospace for JSON args; no explicit color so the text follows
-    # the active theme's palette (a hardcoded grey like '#555' rendered
-    # as near-invisible grey-on-dark under dark themes).
-    # Resolve the platform's actual fixed-pitch family via QFontDatabase
-    # rather than asking for 'monospace' in the stylesheet -- Qt has no
-    # font literally named "Monospace" on macOS / Windows, so the CSS
-    # generic forces a one-time ~50 ms alias scan and prints a
-    # qt.qpa.fonts warning. systemFont(FixedFont) returns Menlo on
-    # macOS, Consolas on Windows, etc.
-    self.args_view.setFont(QtGui.QFontDatabase.systemFont(
-      QtGui.QFontDatabase.FixedFont))
-    set_transparent_background(self.args_view)
-    set_auto_height(self.args_view)
+    self.args_view = plain_text_view(self.body, fixed_pitch=True)
     self.args_view.hide()
 
-    self.result_view = QtWidgets.QPlainTextEdit(self.body)
-    self.result_view.setReadOnly(True)
-    self.result_view.setFrameStyle(QtWidgets.QFrame.NoFrame)
-    set_transparent_background(self.result_view)
-    set_auto_height(self.result_view)
+    self.result_view = plain_text_view(self.body)
     self.result_view.hide()
 
     self.body_layout.addWidget(self.args_view)
