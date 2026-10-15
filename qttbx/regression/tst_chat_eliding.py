@@ -147,8 +147,9 @@ def exercise_eliding_label_re_elides_when_the_layout_resizes_it():
   # the whole shortfall lands on the label under test. Half of LONG rather
   # than a fixed run of characters, so the split stays a half on any font: a
   # literal wide enough to squeeze a proportional font squeezes a fallback box
-  # font to nothing, and a zero-width label is excused from eliding at all.
-  # The host never changes size.
+  # font to nothing, and a zero-width label shows an ellipsis whatever it
+  # was told, which proves nothing about the re-elide. The host never
+  # changes size.
   sibling = QtWidgets.QLabel(LONG[:len(LONG) // 2], host)
   host.layout().addWidget(sibling)
   app.processEvents()
@@ -326,6 +327,208 @@ def exercise_wrapping_label_wraps_and_never_floors():
   del host
 
 
+def exercise_eliding_button_never_renders_empty_and_settles():
+  """A squeezed checkbox must settle, at every width, on a non-empty text.
+
+  _chrome_width measures around the CURRENT text, and a QCheckBox with no
+  text drops its label margin: the chrome shrinks, the next budget fits an
+  ellipsis, the chrome grows back, the ellipsis no longer fits -- and the
+  text flips between '' and '…' on every pass, a resize loop at 100% CPU
+  in a band of widths just above the indicator's. Seen with the approval
+  card's "Always allow this tool" in a 335 to 347 px view.
+  """
+  from qttbx.widgets.chat.eliding import ElidingCheckBox, ElidingRadioButton
+  app = _qapp()
+  for cls in (ElidingCheckBox, ElidingRadioButton):
+    btn = cls()
+    btn.set_full_text(LONG)
+    room = _room_for(btn)
+    host = _in_layout(btn, room)
+    for width in list(range(1, 64)) + list(range(64, room, 16)):
+      host.resize(width, 40)
+      seen = []
+      for _ in range(6):
+        app.processEvents()
+        seen.append(btn.text())
+      assert "" not in seen and len(set(seen)) == 1, (
+        "%s at %d px: text over six passes %r" % (cls.__name__, width, seen))
+    del host
+  # An empty full text stays empty: an icon-only button must not grow an
+  # ellipsis, and the ellipsis it grew looped the same way (no text, no
+  # margin; an ellipsis, a margin) in a band just above its icon's width.
+  from qttbx.widgets.chat.eliding import ElidingToolButton
+  for cls in (ElidingCheckBox, ElidingToolButton):
+    btn = cls()
+    btn.set_full_text("")
+    host = _in_layout(btn, 60)
+    for width in range(1, 40):
+      host.resize(width, 40)
+      seen = []
+      for _ in range(6):
+        app.processEvents()
+        seen.append(btn.text())
+      assert seen == [""] * 6, (
+        "%s with no text at %d px: %r" % (cls.__name__, width, seen))
+    del host
+
+
+def exercise_plain_text_tooltip_shows_markup_literally():
+  """A tooltip auto-detects rich text; a plain-text widget's must not.
+
+  The approval card's title is PlainText because the tool name is
+  externally supplied, so markup in it has to stay literal on hover too;
+  a button's text is always plain. Ordinary text is left alone, so the
+  tooltip of a path still compares equal to the path, and a label that
+  renders markup itself keeps a tooltip that renders it the same way.
+  The caller's own tooltip goes the same way as the default: the card
+  puts a registered tool name there, and a tool disclosure the whole of
+  a status it clamped -- a traceback, whose indentation and line breaks
+  have to come through the escape with it.
+  """
+  from qttbx.widgets.chat.eliding import ElidingLabel, ElidingToolButton
+  _qapp()
+  marked = "<b>phenix_start_job</b> " + LONG
+  # Qt's own rich-text test, where the binding exposes it; the widgets
+  # keep off it (see eliding._could_be_markup) and so can this.
+  might_be_rich = getattr(getattr(QtGui, "Qt", None), "mightBeRichText",
+                          None)
+  # What Qt would render, left to decide: a <module> is no tag it
+  # knows, but an &lt; is as good as one.
+  tracebacks = (
+    'Traceback (most recent call last):\n'
+    '  File "run.py", line 1, in <module>\n'
+    '    raise ValueError("bad")\nValueError: bad',
+    "bad: &lt;unset&gt;")
+
+  def literal(w, tip, what, text=marked):
+    assert tip != text, (what, tip)
+    if might_be_rich is not None:
+      assert might_be_rich(tip), (what, tip)
+    shown = QtGui.QTextDocumentFragment.fromHtml(tip).toPlainText()
+    assert shown == text, (what, shown)
+
+  for cls in (ElidingLabel, ElidingToolButton):
+    w = cls()
+    if isinstance(w, QtWidgets.QLabel):
+      w.setTextFormat(QtCore.Qt.PlainText)
+    w.set_full_text(marked)
+    host = _in_layout(w, _too_narrow_for(w))
+    literal(w, w.toolTip(), cls.__name__)
+    w.set_full_text("short", tooltip=marked)
+    literal(w, w.toolTip(), cls.__name__ + " override")
+    for text in tracebacks:
+      w.set_full_text("short", tooltip=text)
+      literal(w, w.toolTip(), cls.__name__ + " override", text)
+    del host
+  label = ElidingLabel()                   # AutoText: renders the markup
+  label.set_full_text(marked)
+  host = _in_layout(label, _too_narrow_for(label))
+  assert label.toolTip() == marked, label.toolTip()
+  label.set_full_text("short", tooltip=marked)
+  assert label.toolTip() == marked, label.toolTip()
+  del host
+
+
+def exercise_rich_text_test_matches_qt():
+  """The ported Qt::mightBeRichText decides as Qt does.
+
+  Pinned to Qt's answers for the shapes that matter -- a tag it knows,
+  one it does not, markup past the first line, an entity -- and, where
+  the binding exposes Qt's own test, compared with it on every one.
+  """
+  from qttbx.widgets.chat.eliding import _HTML_ELEMENTS, _might_be_rich_text
+  expected = {
+    "": False, "   ": False, "plain text": False,
+    "<b>x</b>": True, "<B>": True, "<br/>": True, "< b>": True,
+    "<b x=1>": True, "\u00a0<b>": True, "a<b>": True,
+    "<!DOCTYPE html>": True, "<?xml version='1'?> <b>": True,
+    "x &lt;": True, "&lt;b&gt;": True,
+    "<module>": False, "<1>": False, "<>": False, "<b": False,
+    "<!-- c -->": False, "<b/ >": False, "x <y": False,
+    "line one\n<b>bold</b>": False, "x\n&lt;": False,
+    "a &amp; b": False, "&LT;": False, "<?xml?>x": False,
+  }
+  expected.update(("<%s>" % tag, True) for tag in _HTML_ELEMENTS)
+  expected.update(("<%s>" % tag, False) for tag in (
+    "abbr", "del", "ins", "section", "strike", "textarea", "video"))
+  for text, rich in expected.items():
+    assert _might_be_rich_text(text) == rich, (text, rich)
+  qt = getattr(getattr(QtGui, "Qt", None), "mightBeRichText", None)
+  if qt is not None:
+    for text in expected:
+      assert _might_be_rich_text(text) == qt(text), (text, qt(text))
+
+
+def exercise_accessible_name_is_the_full_text():
+  """A screen reader gets the whole string, not the elided copy.
+
+  Qt falls back to the rendered text for a widget with no accessible name,
+  which for the approval card's checkbox in a 400 px view is "Alway…".
+  """
+  from qttbx.widgets.chat.eliding import ElidingCheckBox, ElidingLabel
+  _qapp()
+  for cls in (ElidingCheckBox, ElidingLabel):
+    w = cls()
+    w.set_full_text(LONG)
+    host = _in_layout(w, _too_narrow_for(w))
+    assert w.text() != LONG, "%s did not elide" % cls.__name__
+    assert w.accessibleName() == LONG, (cls.__name__, w.accessibleName())
+    del host
+  # Markup a label renders is not read out as tags -- and only that:
+  # what the label shows as it is, the reader gets as it is, newlines
+  # and all. Stripped regardless, "line one\n<b>bold</b>" read as
+  # "line one bold" and a "<module>" as nothing.
+  label = ElidingLabel()                   # AutoText
+  label.set_full_text("[<b>Plan</b>] step")
+  assert label.accessibleName() == "[Plan] step", label.accessibleName()
+  for literal in ("line one\n<b>bold</b>", "x <y", "in <module>",
+                  "a &amp; b"):
+    label.set_full_text(literal)
+    assert label.accessibleName() == literal, label.accessibleName()
+  label.setTextFormat(QtCore.Qt.PlainText)  # shown literally: read so
+  label.set_full_text("[<b>Plan</b>] step")
+  assert label.accessibleName() == "[<b>Plan</b>] step", (
+    label.accessibleName())
+  label.setTextFormat(QtCore.Qt.RichText)   # rendered regardless
+  label.set_full_text("line one\n<b>bold</b>")
+  assert label.accessibleName() == "line one bold", label.accessibleName()
+
+
+def exercise_kept_characters_floor_the_label():
+  """A label given characters to keep floors its container by their width.
+
+  The approval card's "<source> requests:" lead keeps its kind that way:
+  with nothing kept, a long tool name beside it took it to a lone
+  ellipsis. The floor is the kept head (ElideRight) or tail (ElideLeft)
+  and an ellipsis, and never more than the whole text takes.
+  """
+  from qttbx.widgets.chat.eliding import ElidingLabel
+  _qapp()
+  text = "mcp:phenix requests:"
+  for mode, kept in ((QtCore.Qt.ElideRight, "mcp:phe"),
+                     (QtCore.Qt.ElideLeft, "quests:")):
+    label = ElidingLabel(mode=mode, keep=7)
+    label.set_full_text(text)
+    floor = label.minimumSizeHint().width()
+    assert 0 < floor < label.sizeHint().width(), (floor, label.sizeHint())
+    host = _in_layout(label, 1)
+    assert label.width() >= floor, (label.width(), floor)
+    shown = label.text()
+    assert shown != text and kept in shown and "\u2026" in shown, shown
+    assert label.toolTip() == text, label.toolTip()
+    # Grown back, it shows the whole text as any eliding label does.
+    host.resize(_room_for(label), 40)
+    _qapp().processEvents()
+    assert label.text() == text, label.text()
+    del host
+  short = ElidingLabel(keep=7)
+  short.set_full_text("mcp:a")
+  assert short.minimumSizeHint().width() == short.sizeHint().width()
+  none = ElidingLabel()
+  none.set_full_text(text)
+  assert none.minimumSizeHint().width() == 0, none.minimumSizeHint()
+
+
 _EXERCISES = (
   exercise_eliding_label_never_floors_its_container,
   exercise_eliding_label_size_hint_reports_the_full_text,
@@ -339,6 +542,11 @@ _EXERCISES = (
   exercise_eliding_tool_button_hugs_its_text,
   exercise_hugging_widget_shows_its_whole_text,
   exercise_wrapping_label_wraps_and_never_floors,
+  exercise_eliding_button_never_renders_empty_and_settles,
+  exercise_plain_text_tooltip_shows_markup_literally,
+  exercise_rich_text_test_matches_qt,
+  exercise_accessible_name_is_the_full_text,
+  exercise_kept_characters_floor_the_label,
 )
 
 
