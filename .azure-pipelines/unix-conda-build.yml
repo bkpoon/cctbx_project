@@ -207,6 +207,7 @@ steps:
       module=gltbx \
       module=iotbx \
       module=libtbx \
+      module=mmtbx \
       module=rstbx \
       module=scitbx \
       module=crys3d \

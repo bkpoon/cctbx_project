@@ -103,14 +103,14 @@ jobs:
           path: ~/conda_pkgs_dir
           key: ${{ runner.os }}-conda-cache-${{ hashFiles('./modules/cctbx_project/libtbx/auto_build/conda_envs') }}
 
-      - name: Download phenix_examples, phenix_regression
+      - name: Download chem_data, geostd, phenix_examples, phenix_regression
         run: |
           set -xe
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate base
           cd ./modules
           curl -O https://raw.githubusercontent.com/cctbx/cctbx/refs/heads/master/scripts/download-azure-artifact.py
-          for artifact in phenix_examples phenix_regression; do
+          for artifact in chem_data geostd phenix_examples phenix_regression; do
             python download-azure-artifact.py \
               --organization cctbx \
               --project cctbx_project \
@@ -120,6 +120,7 @@ jobs:
             unzip ${artifact}.zip
             rm ${artifact}.zip
           done
+          mv geostd chem_data/geostd
 
       - name: Base environment info
         run: |
@@ -139,6 +140,12 @@ jobs:
           rm -fr ./build
           ls
 
+      - name: Download probe
+        run: |
+          set -xe
+          cd ./modules
+          git clone https://github.com/rlabduke/probe.git
+
       - name: Run bootstrap.py
         run: |
           set -xe
@@ -149,10 +156,12 @@ jobs:
           libtbx.configure \
             cma_es \
             fable \
+            ksdssp \
             qttbx \
             rstbx \
             spotfinder \
             cbflib_adaptbx \
+            chem_data \
             phenix_regression \
             phenix_examples
           cd build
@@ -188,6 +197,7 @@ jobs:
             module=gltbx \
             module=iotbx \
             module=libtbx \
+            module=mmtbx \
             module=rstbx \
             module=scitbx \
             module=crys3d \
@@ -272,7 +282,7 @@ jobs:
           path: ~/conda_pkgs_dir
           key: ${{ runner.os }}-conda-cache-${{ hashFiles('.\\modules\\cctbx_project\\libtbx\\auto_build\\conda_envs') }}
 
-      - name: Download phenix_examples, phenix_regression
+      - name: Download chem_data, phenix_examples, phenix_regression
         shell: cmd
         run: |
           call %CONDA%\condabin\conda.bat activate base
@@ -301,7 +311,29 @@ jobs:
           if %errorlevel% neq 0 exit /b %errorlevel%
           del phenix_regression.zip
           if %errorlevel% neq 0 exit /b %errorlevel%
-
+          python download-azure-artifact.py ^
+            --organization cctbx ^
+            --project cctbx_project ^
+            --definitions 4 ^
+            --artifact-name chem_data ^
+            --local-filename chem_data.zip
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          unzip chem_data.zip
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          del chem_data.zip
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          python download-azure-artifact.py ^
+            --organization cctbx ^
+            --project cctbx_project ^
+            --definitions 4 ^
+            --artifact-name geostd ^
+            --local-filename geostd.zip
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          unzip geostd.zip
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          del geostd.zip
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          move geostd chem_data\geostd
       - name: Base environment info
         shell: cmd
         run: |
@@ -325,6 +357,12 @@ jobs:
           rmdir /s /q .\build
           dir
 
+      - name: Download probe
+        shell: cmd
+        run: |
+          cd .\modules
+          git clone https://github.com/rlabduke/probe.git
+
       - name: Run bootstrap.py
         shell: cmd
         run: |
@@ -342,10 +380,14 @@ jobs:
           call libtbx.configure ^
             cma_es ^
             fable ^
+            ksdssp ^
             qttbx ^
             rstbx ^
             spotfinder ^
-            cbflib_adaptbx
+            cbflib_adaptbx ^
+            chem_data ^
+            phenix_regression ^
+            phenix_examples
           if %errorlevel% neq 0 exit /b %errorlevel%
           cd build
           call libtbx.scons -j 4
@@ -380,6 +422,7 @@ jobs:
             module=gltbx ^
             module=iotbx ^
             module=libtbx ^
+            module=mmtbx ^
             module=rstbx ^
             module=scitbx ^
             module=crys3d ^

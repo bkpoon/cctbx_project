@@ -19,11 +19,6 @@ jobs:
   strategy:
     maxParallel: 2
     matrix:
-      python3.10:
-        CONDA: MacOSX
-        OS: osx-64
-        PYTHON_VERSION: py310
-        MODULES: ${{ parameters.modules }}
       python3.11:
         CONDA: MacOSX
         OS: osx-64
@@ -39,11 +34,11 @@ jobs:
         OS: osx-64
         PYTHON_VERSION: py313
         MODULES: ${{ parameters.modules }}
-      # python3.14:
-      #   CONDA: MacOSX
-      #   OS: osx-64
-      #   PYTHON_VERSION: py314
-      #   MODULES: ${{ parameters.modules }}
+      python3.14:
+        CONDA: MacOSX
+        OS: osx-64
+        PYTHON_VERSION: py314
+        MODULES: ${{ parameters.modules }}
 
   variables:
     - name: artifact_name
@@ -71,14 +66,6 @@ jobs:
       echo "Selecting Xcode version ${{ join('.', parameters.xcode_version) }}"
       sudo xcode-select --switch /Applications/Xcode_${{ join('.', parameters.xcode_version) }}.app/Contents/Developer
     displayName: Select Xcode version
-
-  # - script: |
-  #     echo "Removing homebrew from Azure to avoid conflicts."
-  #     curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall.sh > ~/uninstall_homebrew
-  #     chmod +x ~/uninstall_homebrew
-  #     ~/uninstall_homebrew -f -q
-  #     rm ~/uninstall_homebrew
-  #   displayName: Remove homebrew
 
   # download daily cached build directory for builds
   # always do builds from scratch for "Update build cache" on Saturday night (Pacific)
