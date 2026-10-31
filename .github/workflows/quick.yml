@@ -110,7 +110,7 @@ jobs:
           conda activate base
           cd ./modules
           curl -O https://raw.githubusercontent.com/cctbx/cctbx/refs/heads/master/scripts/download-azure-artifact.py
-          for artifact in phenix_examples phenix_regression; do
+          for artifact in chem_data phenix_examples phenix_regression; do
             python download-azure-artifact.py \
               --organization cctbx \
               --project cctbx_project \
@@ -188,6 +188,7 @@ jobs:
             module=gltbx \
             module=iotbx \
             module=libtbx \
+            module=mmtbx \
             module=rstbx \
             module=scitbx \
             module=crys3d \
@@ -380,6 +381,7 @@ jobs:
             module=gltbx ^
             module=iotbx ^
             module=libtbx ^
+            module=mmtbx ^
             module=rstbx ^
             module=scitbx ^
             module=crys3d ^
