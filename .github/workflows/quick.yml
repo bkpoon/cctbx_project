@@ -172,7 +172,7 @@ jobs:
           export PYTHONTRACEMALLOC=1
           libtbx.run_tests_parallel \
             module=crys3d \
-            max_retries=2 \
+            max_retries=0 \
             nproc=4
 
       - name: Save test directory

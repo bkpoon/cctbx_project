@@ -18,7 +18,7 @@ closetime = 150 # about half the maximum time each test will run
 # HKLviewer uses websockets which is slightly unstable on virtual machines used on Azure.
 # This might yield a bogus failure of the test. If so, repeat the test at most maxruns times
 # or until it passes whichever comes first.
-maxruns = 4
+maxruns = 1  # diagnostic: one run, then dump the viewer's stacks
 browser = "firefox"
 
 
@@ -205,6 +205,7 @@ def communicate_or_kill(obj, budget, what):
     return obj.communicate(timeout=budget)[0]
   except subprocess.TimeoutExpired:
     pass
+  dump_python_stacks(obj.pid)
   kill_process_tree(obj.pid)
   try:
     out = obj.communicate(timeout=30)[0]
@@ -214,6 +215,31 @@ def communicate_or_kill(obj, budget, what):
     out = e.output or b"(no output captured: a process still holds the pipe)"
   print(out.decode(errors="replace"))
   raise RuntimeError("%s exceeded %d s and was killed" % (what, budget))
+
+
+def dump_python_stacks(pid):
+  """Diagnostic: SIGABRT every Python process under ``pid`` so that
+  faulthandler (PYTHONFAULTHANDLER=1 in the viewer's environment) writes
+  each thread's stack to its stderr, which the caller's pipe collects."""
+  import signal
+  import psutil
+  try:
+    root = psutil.Process(pid)
+    procs = [root] + root.children(recursive=True)
+  except psutil.NoSuchProcess:
+    return
+  for p in procs:
+    try:
+      cmd = " ".join(p.cmdline()[:4])
+    except psutil.Error:
+      continue
+    if "python" in cmd.lower():
+      print("SIGABRT -> pid %d: %s" % (p.pid, cmd), flush=True)
+      try:
+        p.send_signal(signal.SIGABRT)
+      except psutil.Error:
+        pass
+  time.sleep(5)
 
 
 def Append2LogFile(fname, souterr):
@@ -274,6 +300,9 @@ def exerciseQtGUI(philstr, refl2match, prefix=""):
             + " --enable-logging=stderr --v=1 --no-sandbox"
   # On Windows Qt warnings go to the debugger, not stderr, without this.
   os.environ["QT_LOGGING_TO_CONSOLE"] = "1"
+  # diagnostic: unbuffered prints and a stack dump on SIGABRT
+  os.environ["PYTHONFAULTHANDLER"] = "1"
+  os.environ["PYTHONUNBUFFERED"] = "1"
   with open(prefix + "environ.txt","w") as mfile:
     # print environment variables to log file
     for k,v in os.environ.items():
