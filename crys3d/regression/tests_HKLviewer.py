@@ -234,6 +234,12 @@ def dump_python_stacks(pid):
     except psutil.Error:
       continue
     if "python" in cmd.lower():
+      if sys.platform == "darwin":
+        # native stacks of every thread, for a hang inside Qt or Chromium
+        sample = subprocess.run(["sample", str(p.pid), "2", "-mayDie"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        print("sample of pid %d: %s\n%s" % (p.pid, cmd,
+              sample.stdout.decode(errors="replace")[:60000]), flush=True)
       print("SIGABRT -> pid %d: %s" % (p.pid, cmd), flush=True)
       try:
         p.send_signal(signal.SIGABRT)
