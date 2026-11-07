@@ -230,7 +230,7 @@ class NGL_HKLViewer(hklviewer_gui.Ui_MainWindow):
   settings = QSettings("CCTBX", "HKLviewer" )
   reset_to_factorydefaults = False
 
-  def __init__(self, thisapp, isembedded=False): #, cctbxpython=None):
+  def __init__(self, thisapp, isembedded=False, activate=True): #, cctbxpython=None):
     self.datatypedict = { }
     self.browserfontsize = None
     self.vectorwidth = None
@@ -573,6 +573,16 @@ newarray._sigmas = sigs
       self.tabText.setVisible(False) # stdout sent to chimeraX's console instead
     self.functionTabWidget.setCurrentIndex(0) # if accidentally set to a different tab in the Qtdesigner
     self.tabWidget.setCurrentIndex(0) # if accidentally set to a different tab in the Qtdesigner
+    if not activate:
+      # Regression runs never let the window take focus. On the macOS 26
+      # Intel CI image the first focus-in makes Qt's Cocoa plugin ask
+      # IconServices for the generic application icon in a synchronous XPC
+      # call that never returns (QCocoaIntegration::focusWindowChanged), and
+      # the event loop never starts. WA_ShowWithoutActivating is not enough:
+      # Qt activates the application right after launch and the window
+      # becomes key anyway. Nothing in the tests needs focus.
+      self.window.setWindowFlags(self.window.windowFlags()
+                                 | Qt.WindowDoesNotAcceptFocus)
     self.window.show()
 
 
@@ -2867,7 +2877,7 @@ def run(isembedded=False, chimeraxsession=None):
     if not isembedded:
       QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     app = QApplication(sys.argv)
-    HKLguiobj = NGL_HKLViewer(app, isembedded)
+    HKLguiobj = NGL_HKLViewer(app, isembedded, activate=closingtime is None)
     if not isembedded:
       timer.setInterval(20)
       timer.timeout.connect(HKLguiobj.ProcessMessages)
